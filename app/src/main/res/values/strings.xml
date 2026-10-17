@@ -1,0 +1,12 @@
+<resources>
+    <string name="app_name">WordCraft</string>
+    <string name="ribbon_home">Home</string>
+    <string name="ribbon_insert">Insert</string>
+    <string name="ribbon_layout">Layout</string>
+    <string name="ribbon_review">Review</string>
+    <string name="ribbon_view">View</string>
+    <string name="ribbon_file">File</string>
+    <string name="new_document">New Document</string>
+    <string name="save_document">Save Document</string>
+    <string name="export_docx">Export DOCX</string>
+</resources>

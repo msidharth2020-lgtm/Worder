@@ -1,0 +1,6 @@
+{
+  "name": "WordCraft",
+  "description": "An open-source, full-featured word processor and document design app with ribbon toolbar, styles, templates, tables, rich formatting, and DOCX/PDF export.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
