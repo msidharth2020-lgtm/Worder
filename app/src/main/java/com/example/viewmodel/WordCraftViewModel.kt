@@ -6,17 +6,24 @@ import android.content.SharedPreferences
 import android.speech.tts.TextToSpeech
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.export.TranslationService
 import com.example.model.BlockType
 import com.example.model.CalloutType
+import com.example.model.ChartData
+import com.example.model.CitationSource
 import com.example.model.Comment
 import com.example.model.DocBlock
-import com.example.model.DocumentStats
+import com.example.model.DocumentThemePreset
+import com.example.model.InkStroke
+import com.example.model.MailMergeRecipient
 import com.example.model.PageMargins
 import com.example.model.PageOrientation
 import com.example.model.PageSize
+import com.example.model.SmartArtData
 import com.example.model.TableData
 import com.example.model.TableStyle
 import com.example.model.TextAlignment
+import com.example.model.UnicodeCatalog
 import com.example.model.WordCraftDoc
 import com.example.model.WordCraftTemplates
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -25,21 +32,29 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
+import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.Locale
 import java.util.UUID
 
 enum class RibbonTab(val label: String) {
     HOME("Home"),
     INSERT("Insert"),
+    DRAW("Draw"),
+    DESIGN("Design"),
     LAYOUT("Layout"),
+    REFERENCES("References"),
+    MAILINGS("Mailings"),
     REVIEW("Review"),
     VIEW("View"),
+    DEVELOPER("Developer"),
+    HELP("Help"),
     TABLE_TOOLS("Table")
 }
 
 enum class ViewMode(val label: String) {
     PRINT_LAYOUT("Print Layout"),
-    WEB_LAYOUT("Continuous"),
+    WEB_LAYOUT("Web Layout"),
     READING_MODE("Read Mode")
 }
 
@@ -78,6 +93,40 @@ class WordCraftViewModel(application: Application) : AndroidViewModel(applicatio
     private val _showStatsDialog = MutableStateFlow(false)
     val showStatsDialog: StateFlow<Boolean> = _showStatsDialog.asStateFlow()
 
+    private val _showUnicodeDialog = MutableStateFlow(false)
+    val showUnicodeDialog: StateFlow<Boolean> = _showUnicodeDialog.asStateFlow()
+
+    private val _showTranslateDialog = MutableStateFlow(false)
+    val showTranslateDialog: StateFlow<Boolean> = _showTranslateDialog.asStateFlow()
+
+    // WordCraft Web v0.7.0 Feature Dialog States
+    private val _showEquationDialog = MutableStateFlow(false)
+    val showEquationDialog: StateFlow<Boolean> = _showEquationDialog.asStateFlow()
+
+    private val _showDrawingDialog = MutableStateFlow(false)
+    val showDrawingDialog: StateFlow<Boolean> = _showDrawingDialog.asStateFlow()
+
+    private val _showChartSmartArtDialog = MutableStateFlow(false)
+    val showChartSmartArtDialog: StateFlow<Boolean> = _showChartSmartArtDialog.asStateFlow()
+
+    private val _showReferencesDialog = MutableStateFlow(false)
+    val showReferencesDialog: StateFlow<Boolean> = _showReferencesDialog.asStateFlow()
+
+    private val _showMailingsDialog = MutableStateFlow(false)
+    val showMailingsDialog: StateFlow<Boolean> = _showMailingsDialog.asStateFlow()
+
+    private val _showAccessibilityDialog = MutableStateFlow(false)
+    val showAccessibilityDialog: StateFlow<Boolean> = _showAccessibilityDialog.asStateFlow()
+
+    private val _isTranslating = MutableStateFlow(false)
+    val isTranslating: StateFlow<Boolean> = _isTranslating.asStateFlow()
+
+    private val _translationPreview = MutableStateFlow("")
+    val translationPreview: StateFlow<String> = _translationPreview.asStateFlow()
+
+    private val _translationStatus = MutableStateFlow<String?>(null)
+    val translationStatus: StateFlow<String?> = _translationStatus.asStateFlow()
+
     private val _showFindReplace = MutableStateFlow(false)
     val showFindReplace: StateFlow<Boolean> = _showFindReplace.asStateFlow()
 
@@ -99,12 +148,21 @@ class WordCraftViewModel(application: Application) : AndroidViewModel(applicatio
     private val _isSpeaking = MutableStateFlow(false)
     val isSpeaking: StateFlow<Boolean> = _isSpeaking.asStateFlow()
 
+    val sampleRecipients = listOf(
+        MailMergeRecipient("Ada", "Lovelace", "Analytical Engine Co.", "ada@analytical.org", "London"),
+        MailMergeRecipient("Grace", "Hopper", "Compiler Systems", "grace@navy.mil", "New York"),
+        MailMergeRecipient("Donald", "Knuth", "TeX Publishing", "knuth@stanford.edu", "Palo Alto")
+    )
+
     private var tts: TextToSpeech? = null
     private var ttsReady = false
 
     init {
         tts = TextToSpeech(application, this)
         loadLastSavedDoc()
+        if (_activeBlockId.value == null) {
+            _activeBlockId.value = _document.value.blocks.firstOrNull()?.id
+        }
     }
 
     override fun onInit(status: Int) {
@@ -162,7 +220,6 @@ class WordCraftViewModel(application: Application) : AndroidViewModel(applicatio
         if (_activeBlockId.value != id) {
             pushUndo()
             _activeBlockId.value = id
-            // Auto-switch to table tab if active block is table
             val block = _document.value.blocks.find { it.id == id }
             if (block?.type == BlockType.TABLE) {
                 _activeRibbonTab.value = RibbonTab.TABLE_TOOLS
@@ -170,47 +227,35 @@ class WordCraftViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
-    fun setShowBackstage(show: Boolean) {
-        _showBackstage.value = show
+    fun setShowBackstage(show: Boolean) { _showBackstage.value = show }
+    fun toggleNavPane() { _showNavPane.value = !_showNavPane.value }
+    fun toggleCommentsPane() { _showCommentsPane.value = !_showCommentsPane.value }
+    fun setShowStatsDialog(show: Boolean) { _showStatsDialog.value = show }
+    fun setShowUnicodeDialog(show: Boolean) { _showUnicodeDialog.value = show }
+    fun setShowEquationDialog(show: Boolean) { _showEquationDialog.value = show }
+    fun setShowDrawingDialog(show: Boolean) { _showDrawingDialog.value = show }
+    fun setShowChartSmartArtDialog(show: Boolean) { _showChartSmartArtDialog.value = show }
+    fun setShowReferencesDialog(show: Boolean) { _showReferencesDialog.value = show }
+    fun setShowMailingsDialog(show: Boolean) { _showMailingsDialog.value = show }
+    fun setShowAccessibilityDialog(show: Boolean) { _showAccessibilityDialog.value = show }
+
+    fun setShowTranslateDialog(show: Boolean) {
+        _showTranslateDialog.value = show
+        if (show) {
+            _translationStatus.value = null
+            _translationPreview.value = ""
+        }
     }
 
-    fun toggleNavPane() {
-        _showNavPane.value = !_showNavPane.value
-    }
-
-    fun toggleCommentsPane() {
-        _showCommentsPane.value = !_showCommentsPane.value
-    }
-
-    fun setShowStatsDialog(show: Boolean) {
-        _showStatsDialog.value = show
-    }
-
-    fun toggleFindReplace() {
-        _showFindReplace.value = !_showFindReplace.value
-    }
-
-    fun setFindQuery(q: String) {
-        _findQuery.value = q
-    }
-
-    fun setReplaceText(t: String) {
-        _replaceText.value = t
-    }
-
-    fun setViewMode(mode: ViewMode) {
-        _viewMode.value = mode
-    }
-
-    fun toggleDarkCanvas() {
-        _isDarkCanvas.value = !_isDarkCanvas.value
-    }
-
-    fun setZoomPercent(percent: Int) {
-        _zoomPercent.value = percent.coerceIn(50, 200)
-    }
+    fun toggleFindReplace() { _showFindReplace.value = !_showFindReplace.value }
+    fun setFindQuery(q: String) { _findQuery.value = q }
+    fun setReplaceText(t: String) { _replaceText.value = t }
+    fun setViewMode(mode: ViewMode) { _viewMode.value = mode }
+    fun toggleDarkCanvas() { _isDarkCanvas.value = !_isDarkCanvas.value }
+    fun setZoomPercent(percent: Int) { _zoomPercent.value = percent.coerceIn(50, 200) }
 
     fun updateTitle(newTitle: String) {
+        if (_document.value.readOnlyLocked) return
         pushUndo()
         _document.value = _document.value.copy(
             title = newTitle,
@@ -220,6 +265,7 @@ class WordCraftViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     fun updateBlockText(blockId: String, newText: String) {
+        if (_document.value.readOnlyLocked) return
         val currentBlock = _document.value.blocks.find { it.id == blockId }
         if (currentBlock?.text == newText) return
         val updated = _document.value.blocks.map {
@@ -233,6 +279,7 @@ class WordCraftViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     fun updateBlockType(blockId: String, newType: BlockType) {
+        if (_document.value.readOnlyLocked) return
         pushUndo()
         val updated = _document.value.blocks.map {
             if (it.id == blockId) it.copy(type = newType) else it
@@ -245,6 +292,7 @@ class WordCraftViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     fun updateBlockAlignment(blockId: String, alignment: TextAlignment) {
+        if (_document.value.readOnlyLocked) return
         pushUndo()
         val updated = _document.value.blocks.map {
             if (it.id == blockId) it.copy(alignment = alignment) else it
@@ -256,10 +304,13 @@ class WordCraftViewModel(application: Application) : AndroidViewModel(applicatio
         saveCurrentDocument()
     }
 
-    fun toggleChecklist(blockId: String) {
+    // --- Font Family, Font Size & Inline Styling Functions ---
+
+    fun updateBlockFontFamily(blockId: String, fontFamily: String) {
+        if (_document.value.readOnlyLocked) return
         pushUndo()
         val updated = _document.value.blocks.map {
-            if (it.id == blockId) it.copy(isChecked = !it.isChecked) else it
+            if (it.id == blockId) it.copy(fontFamily = fontFamily) else it
         }
         _document.value = _document.value.copy(
             blocks = updated,
@@ -268,13 +319,457 @@ class WordCraftViewModel(application: Application) : AndroidViewModel(applicatio
         saveCurrentDocument()
     }
 
-    fun insertBlock(afterBlockId: String?, type: BlockType = BlockType.PARAGRAPH, text: String = "") {
+    fun updateAllBlocksFontFamily(fontFamily: String) {
+        if (_document.value.readOnlyLocked) return
+        pushUndo()
+        val updated = _document.value.blocks.map {
+            it.copy(fontFamily = fontFamily)
+        }
+        _document.value = _document.value.copy(
+            blocks = updated,
+            lastModified = System.currentTimeMillis()
+        )
+        saveCurrentDocument()
+    }
+
+    fun updateBlockFontSize(blockId: String, fontSizeSp: Int) {
+        if (_document.value.readOnlyLocked) return
+        pushUndo()
+        val clamped = fontSizeSp.coerceIn(8, 72)
+        val updated = _document.value.blocks.map {
+            if (it.id == blockId) it.copy(fontSizeSp = clamped) else it
+        }
+        _document.value = _document.value.copy(
+            blocks = updated,
+            lastModified = System.currentTimeMillis()
+        )
+        saveCurrentDocument()
+    }
+
+    fun stepBlockFontSize(blockId: String, deltaSp: Int) {
+        val block = _document.value.blocks.find { it.id == blockId } ?: return
+        val nextSize = (block.effectiveFontSizeSp + deltaSp).coerceIn(8, 72)
+        updateBlockFontSize(blockId, nextSize)
+    }
+
+    fun toggleBlockBold(blockId: String) {
+        if (_document.value.readOnlyLocked) return
+        pushUndo()
+        val updated = _document.value.blocks.map {
+            if (it.id == blockId) it.copy(bold = !it.bold) else it
+        }
+        _document.value = _document.value.copy(blocks = updated, lastModified = System.currentTimeMillis())
+        saveCurrentDocument()
+    }
+
+    fun toggleBlockItalic(blockId: String) {
+        if (_document.value.readOnlyLocked) return
+        pushUndo()
+        val updated = _document.value.blocks.map {
+            if (it.id == blockId) it.copy(italic = !it.italic) else it
+        }
+        _document.value = _document.value.copy(blocks = updated, lastModified = System.currentTimeMillis())
+        saveCurrentDocument()
+    }
+
+    fun toggleBlockUnderline(blockId: String) {
+        if (_document.value.readOnlyLocked) return
+        pushUndo()
+        val updated = _document.value.blocks.map {
+            if (it.id == blockId) it.copy(underline = !it.underline) else it
+        }
+        _document.value = _document.value.copy(blocks = updated, lastModified = System.currentTimeMillis())
+        saveCurrentDocument()
+    }
+
+    fun toggleBlockStrikethrough(blockId: String) {
+        if (_document.value.readOnlyLocked) return
+        pushUndo()
+        val updated = _document.value.blocks.map {
+            if (it.id == blockId) it.copy(strikethrough = !it.strikethrough) else it
+        }
+        _document.value = _document.value.copy(blocks = updated, lastModified = System.currentTimeMillis())
+        saveCurrentDocument()
+    }
+
+    fun updateBlockTextColor(blockId: String, colorHex: String?) {
+        if (_document.value.readOnlyLocked) return
+        pushUndo()
+        val updated = _document.value.blocks.map {
+            if (it.id == blockId) it.copy(textColorHex = colorHex) else it
+        }
+        _document.value = _document.value.copy(blocks = updated, lastModified = System.currentTimeMillis())
+        saveCurrentDocument()
+    }
+
+    fun updateBlockHighlightColor(blockId: String, highlightHex: String?) {
+        if (_document.value.readOnlyLocked) return
+        pushUndo()
+        val updated = _document.value.blocks.map {
+            if (it.id == blockId) it.copy(highlightColorHex = highlightHex) else it
+        }
+        _document.value = _document.value.copy(blocks = updated, lastModified = System.currentTimeMillis())
+        saveCurrentDocument()
+    }
+
+    fun updateBlockLineSpacing(blockId: String, spacing: Float) {
+        if (_document.value.readOnlyLocked) return
+        pushUndo()
+        val updated = _document.value.blocks.map {
+            if (it.id == blockId) it.copy(lineSpacing = spacing) else it
+        }
+        _document.value = _document.value.copy(blocks = updated, lastModified = System.currentTimeMillis())
+        saveCurrentDocument()
+    }
+
+    fun changeBlockIndent(blockId: String, delta: Int) {
+        if (_document.value.readOnlyLocked) return
+        pushUndo()
+        val updated = _document.value.blocks.map {
+            if (it.id == blockId) it.copy(indentLevel = (it.indentLevel + delta).coerceIn(0, 5)) else it
+        }
+        _document.value = _document.value.copy(blocks = updated, lastModified = System.currentTimeMillis())
+        saveCurrentDocument()
+    }
+
+    fun changeBlockCase(blockId: String, mode: String) {
+        if (_document.value.readOnlyLocked) return
+        val block = _document.value.blocks.find { it.id == blockId } ?: return
+        pushUndo()
+        val transformed = when (mode) {
+            "UPPER" -> block.text.uppercase()
+            "LOWER" -> block.text.lowercase()
+            "TITLE" -> block.text.split(" ").joinToString(" ") { w ->
+                w.lowercase().replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
+            }
+            "TOGGLE" -> block.text.map { c ->
+                if (c.isUpperCase()) c.lowercaseChar() else c.uppercaseChar()
+            }.joinToString("")
+            else -> block.text.lowercase().replaceFirstChar { it.uppercase() }
+        }
+        val updated = _document.value.blocks.map {
+            if (it.id == blockId) it.copy(text = transformed) else it
+        }
+        _document.value = _document.value.copy(blocks = updated, lastModified = System.currentTimeMillis())
+        saveCurrentDocument()
+    }
+
+    fun clearBlockFormatting(blockId: String) {
+        if (_document.value.readOnlyLocked) return
+        pushUndo()
+        val updated = _document.value.blocks.map {
+            if (it.id == blockId) {
+                it.copy(
+                    type = BlockType.PARAGRAPH,
+                    bold = false,
+                    italic = false,
+                    underline = false,
+                    strikethrough = false,
+                    fontSizeSp = null,
+                    textColorHex = null,
+                    highlightColorHex = null,
+                    dropCap = false,
+                    indentLevel = 0
+                )
+            } else it
+        }
+        _document.value = _document.value.copy(blocks = updated, lastModified = System.currentTimeMillis())
+        saveCurrentDocument()
+    }
+
+    fun toggleBlockDropCap(blockId: String) {
+        if (_document.value.readOnlyLocked) return
+        pushUndo()
+        val updated = _document.value.blocks.map {
+            if (it.id == blockId) it.copy(dropCap = !it.dropCap) else it
+        }
+        _document.value = _document.value.copy(blocks = updated, lastModified = System.currentTimeMillis())
+        saveCurrentDocument()
+    }
+
+    // --- WordCraft Web v0.7.0 Insert, Draw, Design, References, Mailings, Developer Operations ---
+
+    fun insertCoverPage() {
+        if (_document.value.readOnlyLocked) return
+        pushUndo()
+        val dateStr = SimpleDateFormat("MMMM d, yyyy", Locale.getDefault()).format(Date())
+        val coverBlocks = listOf(
+            DocBlock(
+                type = BlockType.TITLE,
+                text = _document.value.title,
+                alignment = TextAlignment.CENTER,
+                fontSizeSp = 32,
+                bold = true
+            ),
+            DocBlock(
+                type = BlockType.SUBTITLE,
+                text = "Prepared by ${_document.value.author}  •  $dateStr",
+                alignment = TextAlignment.CENTER
+            ),
+            DocBlock(type = BlockType.PAGE_BREAK)
+        )
+        _document.value = _document.value.copy(
+            blocks = coverBlocks + _document.value.blocks,
+            lastModified = System.currentTimeMillis()
+        )
+        saveCurrentDocument()
+    }
+
+    fun insertEquationBlock(equationText: String) {
+        if (_document.value.readOnlyLocked) return
+        insertBlock(_activeBlockId.value, BlockType.EQUATION, equationText)
+    }
+
+    fun insertDrawingBlock(strokes: List<InkStroke>, caption: String = "Freehand Ink Canvas") {
+        if (_document.value.readOnlyLocked || strokes.isEmpty()) return
         pushUndo()
         val newBlock = DocBlock(
             id = UUID.randomUUID().toString(),
-            type = type,
-            text = text
+            type = BlockType.DRAWING,
+            text = caption,
+            inkStrokes = strokes
         )
+        insertCustomBlockAfter(_activeBlockId.value, newBlock)
+    }
+
+    fun insertChartBlock(chartData: ChartData) {
+        if (_document.value.readOnlyLocked) return
+        pushUndo()
+        val newBlock = DocBlock(
+            id = UUID.randomUUID().toString(),
+            type = BlockType.CHART,
+            text = chartData.title,
+            chartData = chartData
+        )
+        insertCustomBlockAfter(_activeBlockId.value, newBlock)
+    }
+
+    fun insertSmartArtBlock(smartArtData: SmartArtData) {
+        if (_document.value.readOnlyLocked) return
+        pushUndo()
+        val newBlock = DocBlock(
+            id = UUID.randomUUID().toString(),
+            type = BlockType.SMART_ART,
+            text = smartArtData.nodes.joinToString(" → "),
+            smartArtData = smartArtData
+        )
+        insertCustomBlockAfter(_activeBlockId.value, newBlock)
+    }
+
+    fun insertShapeBlock(shapeKind: String, labelText: String) {
+        if (_document.value.readOnlyLocked) return
+        pushUndo()
+        val newBlock = DocBlock(
+            id = UUID.randomUUID().toString(),
+            type = BlockType.SHAPE,
+            text = labelText,
+            shapeKind = shapeKind,
+            alignment = TextAlignment.CENTER
+        )
+        insertCustomBlockAfter(_activeBlockId.value, newBlock)
+    }
+
+    fun insertSignatureLineBlock(signerName: String = _document.value.author, signerTitle: String = "Authorized Signatory") {
+        if (_document.value.readOnlyLocked) return
+        pushUndo()
+        val newBlock = DocBlock(
+            id = UUID.randomUUID().toString(),
+            type = BlockType.SIGNATURE_LINE,
+            text = "X __________________________\n$signerName — $signerTitle"
+        )
+        insertCustomBlockAfter(_activeBlockId.value, newBlock)
+    }
+
+    fun insertDateTimeStamp() {
+        val stamp = SimpleDateFormat("MMMM d, yyyy 'at' h:mm a", Locale.getDefault()).format(Date())
+        insertUnicodeSymbol(" $stamp ")
+    }
+
+    fun applyDocumentTheme(preset: DocumentThemePreset) {
+        if (_document.value.readOnlyLocked) return
+        pushUndo()
+        val updatedBlocks = _document.value.blocks.map { b ->
+            val isHeading = b.type in listOf(BlockType.TITLE, BlockType.SUBTITLE, BlockType.HEADING_1, BlockType.HEADING_2, BlockType.HEADING_3)
+            b.copy(fontFamily = if (isHeading) preset.headingFont else preset.bodyFont)
+        }
+        _document.value = _document.value.copy(
+            themePreset = preset,
+            blocks = updatedBlocks,
+            lastModified = System.currentTimeMillis()
+        )
+        saveCurrentDocument()
+    }
+
+    fun setPageColor(colorHex: String?) {
+        pushUndo()
+        _document.value = _document.value.copy(pageColorHex = colorHex)
+        saveCurrentDocument()
+    }
+
+    fun togglePageBorder() {
+        pushUndo()
+        _document.value = _document.value.copy(pageBorder = !_document.value.pageBorder)
+        saveCurrentDocument()
+    }
+
+    fun setDocumentParagraphSpacing(spacing: Float) {
+        if (_document.value.readOnlyLocked) return
+        pushUndo()
+        val updated = _document.value.blocks.map { it.copy(lineSpacing = spacing) }
+        _document.value = _document.value.copy(blocks = updated, lastModified = System.currentTimeMillis())
+        saveCurrentDocument()
+    }
+
+    fun setPageColumns(cols: Int) {
+        pushUndo()
+        _document.value = _document.value.copy(columns = cols.coerceIn(1, 3))
+        saveCurrentDocument()
+    }
+
+    fun toggleLineNumbers() {
+        pushUndo()
+        _document.value = _document.value.copy(showLineNumbers = !_document.value.showLineNumbers)
+        saveCurrentDocument()
+    }
+
+    fun toggleRuler() {
+        _document.value = _document.value.copy(showRuler = !_document.value.showRuler)
+    }
+
+    fun toggleGridlines() {
+        _document.value = _document.value.copy(showGridlines = !_document.value.showGridlines)
+    }
+
+    fun toggleTrackChanges() {
+        _document.value = _document.value.copy(trackChanges = !_document.value.trackChanges)
+    }
+
+    fun toggleReadOnlyLock() {
+        _document.value = _document.value.copy(readOnlyLocked = !_document.value.readOnlyLocked)
+    }
+
+    // --- References Tab Operations (TOC, Citations, Bibliography, Footnotes) ---
+
+    fun insertTableOfContents() {
+        if (_document.value.readOnlyLocked) return
+        pushUndo()
+        val headings = _document.value.blocks.filter {
+            it.type in listOf(BlockType.TITLE, BlockType.HEADING_1, BlockType.HEADING_2, BlockType.HEADING_3)
+        }
+        val tocLines = if (headings.isEmpty()) {
+            "Table of Contents\n1. Introduction ...................... 1"
+        } else {
+            "TABLE OF CONTENTS\n" + headings.mapIndexed { idx, h ->
+                val indent = when (h.type) {
+                    BlockType.HEADING_2 -> "   "
+                    BlockType.HEADING_3 -> "      "
+                    else -> ""
+                }
+                "$indent${idx + 1}. ${h.text} ...................... p. 1"
+            }.joinToString("\n")
+        }
+        val tocBlock = DocBlock(
+            id = UUID.randomUUID().toString(),
+            type = BlockType.TOC,
+            text = tocLines
+        )
+        insertCustomBlockAfter(_activeBlockId.value, tocBlock)
+    }
+
+    fun addCitationSource(tag: String, author: String, title: String, year: String, publisher: String) {
+        pushUndo()
+        val newSrc = CitationSource(tag = tag, author = author, title = title, year = year, publisher = publisher)
+        _document.value = _document.value.copy(sources = _document.value.sources + newSrc)
+        saveCurrentDocument()
+    }
+
+    fun setCitationStyle(style: String) {
+        _document.value = _document.value.copy(citationStyle = style)
+        saveCurrentDocument()
+    }
+
+    fun insertCitationInActiveBlock(source: CitationSource) {
+        val style = _document.value.citationStyle
+        val formatted = when (style) {
+            "MLA" -> " (${source.author.substringBefore(",")} ${source.year})"
+            "IEEE" -> " [${_document.value.sources.indexOfFirst { it.id == source.id }.coerceAtLeast(0) + 1}]"
+            else -> " (${source.author.substringBefore(",")}, ${source.year})"
+        }
+        insertUnicodeSymbol(formatted)
+    }
+
+    fun insertBibliographyBlock() {
+        if (_document.value.readOnlyLocked) return
+        pushUndo()
+        val style = _document.value.citationStyle
+        val entries = _document.value.sources.mapIndexed { idx, s ->
+            when (style) {
+                "IEEE" -> "[${idx + 1}] ${s.author}, \"${s.title},\" ${s.publisher}, ${s.year}."
+                "MLA" -> "${s.author}. *${s.title}*. ${s.publisher}, ${s.year}."
+                else -> "${s.author} (${s.year}). ${s.title}. ${s.publisher}."
+            }
+        }
+        val bibText = "REFERENCES ($style)\n" + entries.joinToString("\n")
+        val bibBlock = DocBlock(
+            id = UUID.randomUUID().toString(),
+            type = BlockType.BIBLIOGRAPHY,
+            text = bibText
+        )
+        insertCustomBlockAfter(_activeBlockId.value, bibBlock)
+    }
+
+    fun addFootnoteToActiveBlock(noteText: String) {
+        if (noteText.isBlank() || _document.value.readOnlyLocked) return
+        pushUndo()
+        val fnIndex = _document.value.footnotes.size + 1
+        val targetId = _activeBlockId.value ?: _document.value.blocks.lastOrNull()?.id ?: return
+        val updatedBlocks = _document.value.blocks.map {
+            if (it.id == targetId) it.copy(text = "${it.text}[$fnIndex]", footnote = noteText) else it
+        }
+        _document.value = _document.value.copy(
+            blocks = updatedBlocks,
+            footnotes = _document.value.footnotes + "[$fnIndex] $noteText",
+            lastModified = System.currentTimeMillis()
+        )
+        saveCurrentDocument()
+    }
+
+    // --- Mailings & Developer Content Controls ---
+
+    fun insertMergeField(fieldToken: String) {
+        insertUnicodeSymbol(" «$fieldToken» ")
+    }
+
+    fun applyMailMergeRecipient(recipient: MailMergeRecipient) {
+        if (_document.value.readOnlyLocked) return
+        pushUndo()
+        val updatedBlocks = _document.value.blocks.map { b ->
+            val merged = b.text
+                .replace("«First_Name»", recipient.firstName)
+                .replace("«Last_Name»", recipient.lastName)
+                .replace("«Company»", recipient.company)
+                .replace("«Email»", recipient.email)
+                .replace("«City»", recipient.city)
+                .replace("«AddressBlock»", "${recipient.firstName} ${recipient.lastName}\n${recipient.company} • ${recipient.city}")
+                .replace("«GreetingLine»", "Dear ${recipient.firstName} ${recipient.lastName},")
+            b.copy(text = merged)
+        }
+        _document.value = _document.value.copy(blocks = updatedBlocks, lastModified = System.currentTimeMillis())
+        saveCurrentDocument()
+    }
+
+    fun insertContentControl(kind: String) {
+        val snippet = when (kind) {
+            "TEXT" -> "[Click or tap here to enter text]"
+            "DATE" -> "[Date: ${SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())}]"
+            "DROPDOWN" -> "[Choose an item: Approved | Pending | In Review]"
+            "CHECKBOX" -> "☐ [Interactive Check Box Control]"
+            else -> "[Content Control]"
+        }
+        insertUnicodeSymbol(" $snippet ")
+    }
+
+    private fun insertCustomBlockAfter(afterBlockId: String?, newBlock: DocBlock) {
         val currentBlocks = _document.value.blocks.toMutableList()
         val insertIndex = if (afterBlockId == null) {
             currentBlocks.size
@@ -291,8 +786,178 @@ class WordCraftViewModel(application: Application) : AndroidViewModel(applicatio
         saveCurrentDocument()
     }
 
+    // --- Unicode & Symbol Functions ---
+
+    fun insertUnicodeSymbol(symbol: String) {
+        if (_document.value.readOnlyLocked) return
+        pushUndo()
+        val targetId = _activeBlockId.value ?: _document.value.blocks.lastOrNull()?.id
+        if (targetId == null) {
+            insertBlock(null, BlockType.PARAGRAPH, symbol)
+            return
+        }
+        val updated = _document.value.blocks.map {
+            if (it.id == targetId) it.copy(text = it.text + symbol) else it
+        }
+        _document.value = _document.value.copy(
+            blocks = updated,
+            lastModified = System.currentTimeMillis()
+        )
+        saveCurrentDocument()
+    }
+
+    fun convertTrailingHexInActiveBlock() {
+        if (_document.value.readOnlyLocked) return
+        val targetId = _activeBlockId.value ?: _document.value.blocks.firstOrNull()?.id ?: return
+        val block = _document.value.blocks.find { it.id == targetId } ?: return
+        if (block.text.isEmpty()) return
+        pushUndo()
+        val converted = UnicodeCatalog.toggleTrailingUnicodeHex(block.text)
+        val updated = _document.value.blocks.map {
+            if (it.id == targetId) it.copy(text = converted) else it
+        }
+        _document.value = _document.value.copy(
+            blocks = updated,
+            lastModified = System.currentTimeMillis()
+        )
+        saveCurrentDocument()
+    }
+
+    fun normalizeActiveBlockUnicode(formName: String) {
+        if (_document.value.readOnlyLocked) return
+        val targetId = _activeBlockId.value ?: _document.value.blocks.firstOrNull()?.id ?: return
+        val block = _document.value.blocks.find { it.id == targetId } ?: return
+        pushUndo()
+        val normalized = UnicodeCatalog.normalize(block.text, formName)
+        val updated = _document.value.blocks.map {
+            if (it.id == targetId) it.copy(text = normalized) else it
+        }
+        _document.value = _document.value.copy(
+            blocks = updated,
+            lastModified = System.currentTimeMillis()
+        )
+        saveCurrentDocument()
+    }
+
+    // --- Google Translate / Neural Translation Functions ---
+
+    fun previewBlockTranslation(text: String, sourceLang: String, targetLang: String) {
+        if (text.isBlank()) {
+            _translationStatus.value = "Selected block is empty."
+            return
+        }
+        viewModelScope.launch {
+            _isTranslating.value = true
+            _translationStatus.value = "Translating..."
+            val result = TranslationService.translateText(text, sourceLang, targetLang)
+            _isTranslating.value = false
+            result.onSuccess { translated ->
+                _translationPreview.value = translated
+                _translationStatus.value = "Translation complete."
+            }.onFailure { err ->
+                _translationStatus.value = "Translation error: ${err.message}"
+            }
+        }
+    }
+
+    fun applyTranslationToActiveBlock(translatedText: String, insertBelow: Boolean) {
+        if (translatedText.isBlank() || _document.value.readOnlyLocked) return
+        val targetId = _activeBlockId.value ?: _document.value.blocks.firstOrNull()?.id
+        if (targetId == null) {
+            insertBlock(null, BlockType.PARAGRAPH, translatedText)
+            return
+        }
+        if (insertBelow) {
+            val activeBlock = _document.value.blocks.find { it.id == targetId }
+            insertBlock(targetId, activeBlock?.type ?: BlockType.PARAGRAPH, translatedText)
+        } else {
+            pushUndo()
+            val updated = _document.value.blocks.map {
+                if (it.id == targetId) it.copy(text = translatedText) else it
+            }
+            _document.value = _document.value.copy(
+                blocks = updated,
+                lastModified = System.currentTimeMillis()
+            )
+            saveCurrentDocument()
+        }
+    }
+
+    fun translateEntireDocument(sourceLang: String, targetLang: String) {
+        if (_document.value.readOnlyLocked) return
+        viewModelScope.launch {
+            _isTranslating.value = true
+            _translationStatus.value = "Translating entire document..."
+            pushUndo()
+
+            val currentDoc = _document.value
+            val translatedTitle = TranslationService.translateText(currentDoc.title, sourceLang, targetLang)
+                .getOrDefault(currentDoc.title)
+
+            val newBlocks = mutableListOf<DocBlock>()
+            for ((index, block) in currentDoc.blocks.withIndex()) {
+                _translationStatus.value = "Translating block ${index + 1} of ${currentDoc.blocks.size}..."
+                if (block.type == BlockType.TABLE && block.tableData != null) {
+                    val t = block.tableData
+                    val newHeaders = t.headers.map { h ->
+                        if (h.isNotBlank()) TranslationService.translateText(h, sourceLang, targetLang).getOrDefault(h) else h
+                    }
+                    val newRows = t.rows.map { row ->
+                        row.map { cell ->
+                            if (cell.isNotBlank()) TranslationService.translateText(cell, sourceLang, targetLang).getOrDefault(cell) else cell
+                        }
+                    }
+                    newBlocks.add(block.copy(tableData = t.copy(headers = newHeaders, rows = newRows)))
+                } else if (block.text.isNotBlank()) {
+                    val trText = TranslationService.translateText(block.text, sourceLang, targetLang)
+                        .getOrDefault(block.text)
+                    newBlocks.add(block.copy(text = trText))
+                } else {
+                    newBlocks.add(block)
+                }
+            }
+
+            _document.value = currentDoc.copy(
+                title = translatedTitle,
+                blocks = newBlocks,
+                lastModified = System.currentTimeMillis()
+            )
+            _isTranslating.value = false
+            _translationStatus.value = "Full document translated!"
+            saveCurrentDocument()
+        }
+    }
+
+    // --- Existing Document Operations ---
+
+    fun toggleChecklist(blockId: String) {
+        if (_document.value.readOnlyLocked) return
+        pushUndo()
+        val updated = _document.value.blocks.map {
+            if (it.id == blockId) it.copy(isChecked = !it.isChecked) else it
+        }
+        _document.value = _document.value.copy(
+            blocks = updated,
+            lastModified = System.currentTimeMillis()
+        )
+        saveCurrentDocument()
+    }
+
+    fun insertBlock(afterBlockId: String?, type: BlockType = BlockType.PARAGRAPH, text: String = "") {
+        if (_document.value.readOnlyLocked) return
+        pushUndo()
+        val activeFont = _document.value.blocks.find { it.id == afterBlockId }?.fontFamily ?: "Inter"
+        val newBlock = DocBlock(
+            id = UUID.randomUUID().toString(),
+            type = type,
+            text = text,
+            fontFamily = activeFont
+        )
+        insertCustomBlockAfter(afterBlockId, newBlock)
+    }
+
     fun deleteBlock(blockId: String) {
-        if (_document.value.blocks.size <= 1) return
+        if (_document.value.readOnlyLocked || _document.value.blocks.size <= 1) return
         pushUndo()
         val currentBlocks = _document.value.blocks.filterNot { it.id == blockId }
         _document.value = _document.value.copy(
@@ -304,6 +969,7 @@ class WordCraftViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     fun insertTable(rows: Int = 3, cols: Int = 3, afterBlockId: String? = null) {
+        if (_document.value.readOnlyLocked) return
         pushUndo()
         val headers = (1..cols).map { "Column $it" }
         val rowData = (1..rows).map { r -> (1..cols).map { c -> "Cell $r,$c" } }
@@ -325,11 +991,11 @@ class WordCraftViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     fun updateTableCell(blockId: String, rowIndex: Int, colIndex: Int, text: String) {
+        if (_document.value.readOnlyLocked) return
         val block = _document.value.blocks.find { it.id == blockId } ?: return
         val table = block.tableData ?: return
 
         val newTable = if (rowIndex == -1) {
-            // Header row
             val newHeaders = table.headers.toMutableList()
             if (colIndex in newHeaders.indices) {
                 if (newHeaders[colIndex] == text) return
@@ -358,6 +1024,7 @@ class WordCraftViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     fun addTableRow(blockId: String) {
+        if (_document.value.readOnlyLocked) return
         val block = _document.value.blocks.find { it.id == blockId } ?: return
         val table = block.tableData ?: return
         pushUndo()
@@ -372,6 +1039,7 @@ class WordCraftViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     fun addTableCol(blockId: String) {
+        if (_document.value.readOnlyLocked) return
         val block = _document.value.blocks.find { it.id == blockId } ?: return
         val table = block.tableData ?: return
         pushUndo()
@@ -385,6 +1053,7 @@ class WordCraftViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     fun deleteTableRow(blockId: String, rowIndex: Int) {
+        if (_document.value.readOnlyLocked) return
         val block = _document.value.blocks.find { it.id == blockId } ?: return
         val table = block.tableData ?: return
         if (table.rows.size <= 1) return
@@ -397,7 +1066,45 @@ class WordCraftViewModel(application: Application) : AndroidViewModel(applicatio
         saveCurrentDocument()
     }
 
+    fun updateTableStyle(blockId: String, style: TableStyle) {
+        val block = _document.value.blocks.find { it.id == blockId } ?: return
+        val table = block.tableData ?: return
+        pushUndo()
+        val updated = _document.value.blocks.map {
+            if (it.id == blockId) it.copy(tableData = table.copy(style = style)) else it
+        }
+        _document.value = _document.value.copy(blocks = updated, lastModified = System.currentTimeMillis())
+        saveCurrentDocument()
+    }
+
+    fun appendTableFormulaSummaryRow(blockId: String, formulaType: String) {
+        val block = _document.value.blocks.find { it.id == blockId } ?: return
+        val table = block.tableData ?: return
+        pushUndo()
+        val colCount = table.headers.size.coerceAtLeast(1)
+        val summaryRow = (0 until colCount).map { colIdx ->
+            if (colIdx == 0) {
+                if (formulaType == "AVG") "Average" else "Total (SUM)"
+            } else {
+                val nums = table.rows.mapNotNull { r ->
+                    r.getOrNull(colIdx)?.replace("[^0-9.-]".toRegex(), "")?.toDoubleOrNull()
+                }
+                if (nums.isEmpty()) "-"
+                else {
+                    val v = if (formulaType == "AVG") nums.average() else nums.sum()
+                    String.format(Locale.US, "%.1f", v)
+                }
+            }
+        }
+        val updated = _document.value.blocks.map {
+            if (it.id == blockId) it.copy(tableData = table.copy(rows = table.rows + listOf(summaryRow))) else it
+        }
+        _document.value = _document.value.copy(blocks = updated, lastModified = System.currentTimeMillis())
+        saveCurrentDocument()
+    }
+
     fun insertCallout(afterBlockId: String?, calloutType: CalloutType = CalloutType.INFO, text: String = "Note:") {
+        if (_document.value.readOnlyLocked) return
         pushUndo()
         val newBlock = DocBlock(
             id = UUID.randomUUID().toString(),
@@ -405,15 +1112,7 @@ class WordCraftViewModel(application: Application) : AndroidViewModel(applicatio
             text = text,
             calloutType = calloutType
         )
-        val list = _document.value.blocks.toMutableList()
-        val idx = if (afterBlockId != null) {
-            val i = list.indexOfFirst { it.id == afterBlockId }
-            if (i >= 0) i + 1 else list.size
-        } else list.size
-        list.add(idx, newBlock)
-        _document.value = _document.value.copy(blocks = list, lastModified = System.currentTimeMillis())
-        _activeBlockId.value = newBlock.id
-        saveCurrentDocument()
+        insertCustomBlockAfter(afterBlockId, newBlock)
     }
 
     fun addComment(blockId: String, author: String = "WordCraft User", text: String) {
@@ -465,8 +1164,14 @@ class WordCraftViewModel(application: Application) : AndroidViewModel(applicatio
         saveCurrentDocument()
     }
 
+    fun updateHeaderFooter(header: String?, footer: String?) {
+        pushUndo()
+        _document.value = _document.value.copy(headerText = header, footerText = footer)
+        saveCurrentDocument()
+    }
+
     fun replaceAll(find: String, replace: String) {
-        if (find.isEmpty()) return
+        if (find.isEmpty() || _document.value.readOnlyLocked) return
         pushUndo()
         val updated = _document.value.blocks.map { block ->
             if (block.text.contains(find, ignoreCase = true)) {
@@ -518,6 +1223,10 @@ class WordCraftViewModel(application: Application) : AndroidViewModel(applicatio
                     put("headerText", doc.headerText ?: "")
                     put("footerText", doc.footerText ?: "")
                     put("showPageNumbers", doc.showPageNumbers)
+                    put("pageColorHex", doc.pageColorHex ?: "")
+                    put("pageBorder", doc.pageBorder)
+                    put("columns", doc.columns)
+                    put("showLineNumbers", doc.showLineNumbers)
 
                     val blocksArr = JSONArray()
                     for (b in doc.blocks) {
@@ -526,8 +1235,18 @@ class WordCraftViewModel(application: Application) : AndroidViewModel(applicatio
                             put("type", b.type.name)
                             put("text", b.text)
                             put("alignment", b.alignment.name)
+                            put("fontFamily", b.fontFamily)
+                            if (b.fontSizeSp != null) put("fontSizeSp", b.fontSizeSp)
+                            put("bold", b.bold)
+                            put("italic", b.italic)
+                            put("underline", b.underline)
+                            put("strikethrough", b.strikethrough)
+                            put("dropCap", b.dropCap)
+                            put("textColorHex", b.textColorHex ?: "")
+                            put("highlightColorHex", b.highlightColorHex ?: "")
                             put("isChecked", b.isChecked)
                             put("calloutType", b.calloutType?.name ?: "")
+                            put("shapeKind", b.shapeKind ?: "")
 
                             b.tableData?.let { t ->
                                 val tObj = JSONObject().apply {
@@ -564,6 +1283,7 @@ class WordCraftViewModel(application: Application) : AndroidViewModel(applicatio
                 val type = runCatching { BlockType.valueOf(bObj.getString("type")) }.getOrDefault(BlockType.PARAGRAPH)
                 val align = runCatching { TextAlignment.valueOf(bObj.getString("alignment")) }.getOrDefault(TextAlignment.LEFT)
                 val callout = runCatching { CalloutType.valueOf(bObj.getString("calloutType")) }.getOrNull()
+                val fontSize = if (bObj.has("fontSizeSp")) bObj.optInt("fontSizeSp", type.defaultFontSizeSp()) else null
 
                 var tableData: TableData? = null
                 if (bObj.has("tableData")) {
@@ -585,9 +1305,19 @@ class WordCraftViewModel(application: Application) : AndroidViewModel(applicatio
                         type = type,
                         text = bObj.getString("text"),
                         alignment = align,
+                        fontFamily = bObj.optString("fontFamily", "Inter").ifBlank { "Inter" },
+                        fontSizeSp = fontSize,
+                        bold = bObj.optBoolean("bold", false),
+                        italic = bObj.optBoolean("italic", false),
+                        underline = bObj.optBoolean("underline", false),
+                        strikethrough = bObj.optBoolean("strikethrough", false),
+                        dropCap = bObj.optBoolean("dropCap", false),
+                        textColorHex = bObj.optString("textColorHex").takeIf { it.isNotBlank() },
+                        highlightColorHex = bObj.optString("highlightColorHex").takeIf { it.isNotBlank() },
                         isChecked = bObj.optBoolean("isChecked", false),
                         calloutType = callout,
-                        tableData = tableData
+                        tableData = tableData,
+                        shapeKind = bObj.optString("shapeKind").takeIf { it.isNotBlank() }
                     )
                 )
             }
@@ -605,7 +1335,11 @@ class WordCraftViewModel(application: Application) : AndroidViewModel(applicatio
                 watermark = json.optString("watermark").takeIf { it.isNotBlank() },
                 headerText = json.optString("headerText", "WordCraft Document"),
                 footerText = json.optString("footerText", "Page 1"),
-                showPageNumbers = json.optBoolean("showPageNumbers", true)
+                showPageNumbers = json.optBoolean("showPageNumbers", true),
+                pageColorHex = json.optString("pageColorHex").takeIf { it.isNotBlank() },
+                pageBorder = json.optBoolean("pageBorder", false),
+                columns = json.optInt("columns", 1),
+                showLineNumbers = json.optBoolean("showLineNumbers", false)
             )
         } catch (e: Exception) {
             e.printStackTrace()

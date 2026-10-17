@@ -14,36 +14,69 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.BorderOuter
+import androidx.compose.material.icons.filled.Brush
 import androidx.compose.material.icons.filled.Checklist
+import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Comment
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.FontDownload
 import androidx.compose.material.icons.filled.FormatAlignCenter
 import androidx.compose.material.icons.filled.FormatAlignJustify
 import androidx.compose.material.icons.filled.FormatAlignLeft
 import androidx.compose.material.icons.filled.FormatAlignRight
+import androidx.compose.material.icons.filled.FormatBold
+import androidx.compose.material.icons.filled.FormatClear
+import androidx.compose.material.icons.filled.FormatColorFill
+import androidx.compose.material.icons.filled.FormatColorText
+import androidx.compose.material.icons.filled.FormatIndentDecrease
+import androidx.compose.material.icons.filled.FormatIndentIncrease
+import androidx.compose.material.icons.filled.FormatItalic
 import androidx.compose.material.icons.filled.FormatListBulleted
 import androidx.compose.material.icons.filled.FormatListNumbered
 import androidx.compose.material.icons.filled.FormatQuote
+import androidx.compose.material.icons.filled.FormatSize
+import androidx.compose.material.icons.filled.FormatStrikethrough
+import androidx.compose.material.icons.filled.FormatUnderlined
+import androidx.compose.material.icons.filled.Functions
+import androidx.compose.material.icons.filled.GridOn
+import androidx.compose.material.icons.filled.HelpOutline
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LightMode
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.LockOpen
+import androidx.compose.material.icons.filled.MailOutline
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.Pageview
+import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.South
+import androidx.compose.material.icons.filled.Straighten
+import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.TableChart
+import androidx.compose.material.icons.filled.TextDecrease
+import androidx.compose.material.icons.filled.TextFields
+import androidx.compose.material.icons.filled.TextIncrease
 import androidx.compose.material.icons.filled.Title
+import androidx.compose.material.icons.filled.TrackChanges
+import androidx.compose.material.icons.filled.Translate
+import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.material.icons.filled.ViewAgenda
 import androidx.compose.material.icons.filled.ViewCarousel
+import androidx.compose.material.icons.filled.ViewColumn
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.Divider
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Surface
@@ -68,12 +101,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.model.BlockType
 import com.example.model.CalloutType
+import com.example.model.DocumentThemePreset
 import com.example.model.PageMargins
 import com.example.model.PageOrientation
 import com.example.model.PageSize
+import com.example.model.TableStyle
 import com.example.model.TextAlignment
+import com.example.ui.theme.WordCraftFonts
 import com.example.ui.theme.WordCraftPrimary
-import com.example.ui.theme.WordCraftRibbonBgLight
 import com.example.viewmodel.RibbonTab
 import com.example.viewmodel.ViewMode
 import com.example.viewmodel.WordCraftViewModel
@@ -86,13 +121,15 @@ fun WordCraftRibbon(
     val activeTab by viewModel.activeRibbonTab.collectAsState()
     val activeBlockId by viewModel.activeBlockId.collectAsState()
     val doc by viewModel.document.collectAsState()
-    val activeBlock = remember(doc, activeBlockId) { doc.blocks.find { it.id == activeBlockId } }
+    val activeBlock = remember(doc, activeBlockId) {
+        doc.blocks.find { it.id == activeBlockId } ?: doc.blocks.firstOrNull()
+    }
 
     val tabs = remember(activeBlock) {
         if (activeBlock?.type == BlockType.TABLE) {
             RibbonTab.values().toList()
         } else {
-            listOf(RibbonTab.HOME, RibbonTab.INSERT, RibbonTab.LAYOUT, RibbonTab.REVIEW, RibbonTab.VIEW)
+            RibbonTab.values().filterNot { it == RibbonTab.TABLE_TOOLS }
         }
     }
 
@@ -102,7 +139,7 @@ fun WordCraftRibbon(
         shadowElevation = 2.dp
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
-            // Tabs Strip
+            // Tabs Strip (All 11 standard tabs + contextual Table tab from wordcraft-web-0.7.0)
             ScrollableTabRow(
                 selectedTabIndex = tabs.indexOf(activeTab).coerceAtLeast(0),
                 edgePadding = 8.dp,
@@ -153,9 +190,15 @@ fun WordCraftRibbon(
                 when (activeTab) {
                     RibbonTab.HOME -> HomeRibbonTools(viewModel, activeBlock)
                     RibbonTab.INSERT -> InsertRibbonTools(viewModel, activeBlock)
+                    RibbonTab.DRAW -> DrawRibbonTools(viewModel)
+                    RibbonTab.DESIGN -> DesignRibbonTools(viewModel)
                     RibbonTab.LAYOUT -> LayoutRibbonTools(viewModel)
-                    RibbonTab.REVIEW -> ReviewRibbonTools(viewModel, activeBlock)
+                    RibbonTab.REFERENCES -> ReferencesRibbonTools(viewModel)
+                    RibbonTab.MAILINGS -> MailingsRibbonTools(viewModel)
+                    RibbonTab.REVIEW -> ReviewRibbonTools(viewModel)
                     RibbonTab.VIEW -> ViewRibbonTools(viewModel)
+                    RibbonTab.DEVELOPER -> DeveloperRibbonTools(viewModel)
+                    RibbonTab.HELP -> HelpRibbonTools(viewModel)
                     RibbonTab.TABLE_TOOLS -> TableRibbonTools(viewModel, activeBlock)
                 }
             }
@@ -168,7 +211,254 @@ private fun HomeRibbonTools(
     viewModel: WordCraftViewModel,
     activeBlock: com.example.model.DocBlock?
 ) {
-    // Styles Dropdown Gallery
+    // 1. Font Family Selector
+    var showFontMenu by remember { mutableStateOf(false) }
+    val currentFontName = activeBlock?.fontFamily ?: "Inter"
+
+    Box {
+        RibbonActionButton(
+            icon = Icons.Default.FontDownload,
+            label = currentFontName,
+            onClick = { showFontMenu = true },
+            testTag = "ribbon_font_family_button"
+        )
+        DropdownMenu(
+            expanded = showFontMenu,
+            onDismissRequest = { showFontMenu = false }
+        ) {
+            WordCraftFonts.availableFonts.forEach { fontOpt ->
+                DropdownMenuItem(
+                    text = {
+                        Column {
+                            Text(
+                                text = fontOpt.displayName,
+                                fontFamily = fontOpt.fontFamily,
+                                fontSize = 15.sp,
+                                fontWeight = if (currentFontName == fontOpt.id) FontWeight.Bold else FontWeight.Normal
+                            )
+                            Text(
+                                text = fontOpt.category,
+                                fontSize = 10.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    },
+                    onClick = {
+                        activeBlock?.let { viewModel.updateBlockFontFamily(it.id, fontOpt.id) }
+                        showFontMenu = false
+                    }
+                )
+            }
+            Divider()
+            DropdownMenuItem(
+                text = {
+                    Text(
+                        text = "Apply \"$currentFontName\" to Entire Document",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = WordCraftPrimary
+                    )
+                },
+                onClick = {
+                    viewModel.updateAllBlocksFontFamily(currentFontName)
+                    showFontMenu = false
+                }
+            )
+        }
+    }
+
+    // 2. Font Size Selector & Stepper Buttons
+    var showFontSizeMenu by remember { mutableStateOf(false) }
+    val currentFontSize = activeBlock?.effectiveFontSizeSp ?: 15
+
+    Box {
+        RibbonActionButton(
+            icon = Icons.Default.FormatSize,
+            label = "${currentFontSize} pt",
+            onClick = { showFontSizeMenu = true },
+            testTag = "ribbon_font_size_button"
+        )
+        DropdownMenu(
+            expanded = showFontSizeMenu,
+            onDismissRequest = { showFontSizeMenu = false }
+        ) {
+            WordCraftFonts.presetFontSizes.forEach { sizePt ->
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            text = "$sizePt pt",
+                            fontWeight = if (sizePt == currentFontSize) FontWeight.Bold else FontWeight.Normal
+                        )
+                    },
+                    onClick = {
+                        activeBlock?.let { viewModel.updateBlockFontSize(it.id, sizePt) }
+                        showFontSizeMenu = false
+                    }
+                )
+            }
+        }
+    }
+
+    RibbonIconButton(
+        icon = Icons.Default.TextIncrease,
+        label = "Increase Font Size",
+        onClick = { activeBlock?.let { viewModel.stepBlockFontSize(it.id, +2) } },
+        testTag = "font_size_increase_button"
+    )
+    RibbonIconButton(
+        icon = Icons.Default.TextDecrease,
+        label = "Decrease Font Size",
+        onClick = { activeBlock?.let { viewModel.stepBlockFontSize(it.id, -2) } },
+        testTag = "font_size_decrease_button"
+    )
+
+    RibbonDivider()
+
+    // 3. Bold, Italic, Underline, Strikethrough, Change Case, Text Color, Highlight, Clear Formatting
+    RibbonIconButton(
+        icon = Icons.Default.FormatBold,
+        label = "Bold",
+        isSelected = activeBlock?.bold == true,
+        onClick = { activeBlock?.let { viewModel.toggleBlockBold(it.id) } },
+        testTag = "format_bold_button"
+    )
+    RibbonIconButton(
+        icon = Icons.Default.FormatItalic,
+        label = "Italic",
+        isSelected = activeBlock?.italic == true,
+        onClick = { activeBlock?.let { viewModel.toggleBlockItalic(it.id) } },
+        testTag = "format_italic_button"
+    )
+    RibbonIconButton(
+        icon = Icons.Default.FormatUnderlined,
+        label = "Underline",
+        isSelected = activeBlock?.underline == true,
+        onClick = { activeBlock?.let { viewModel.toggleBlockUnderline(it.id) } },
+        testTag = "format_underline_button"
+    )
+    RibbonIconButton(
+        icon = Icons.Default.FormatStrikethrough,
+        label = "Strikethrough",
+        isSelected = activeBlock?.strikethrough == true,
+        onClick = { activeBlock?.let { viewModel.toggleBlockStrikethrough(it.id) } },
+        testTag = "format_strikethrough_button"
+    )
+
+    // Change Case Menu (Aa)
+    var showCaseMenu by remember { mutableStateOf(false) }
+    Box {
+        RibbonActionButton(
+            icon = Icons.Default.TextFields,
+            label = "Aa",
+            onClick = { showCaseMenu = true },
+            testTag = "change_case_button"
+        )
+        DropdownMenu(expanded = showCaseMenu, onDismissRequest = { showCaseMenu = false }) {
+            listOf(
+                "Sentence case." to "SENTENCE",
+                "lowercase" to "LOWER",
+                "UPPERCASE" to "UPPER",
+                "Capitalize Each Word" to "TITLE",
+                "tOGGLE cASE" to "TOGGLE"
+            ).forEach { (label, mode) ->
+                DropdownMenuItem(
+                    text = { Text(label, fontSize = 13.sp) },
+                    onClick = {
+                        activeBlock?.let { viewModel.changeBlockCase(it.id, mode) }
+                        showCaseMenu = false
+                    }
+                )
+            }
+        }
+    }
+
+    var showColorMenu by remember { mutableStateOf(false) }
+    Box {
+        RibbonIconButton(
+            icon = Icons.Default.FormatColorText,
+            label = "Text Color",
+            isSelected = !activeBlock?.textColorHex.isNullOrBlank(),
+            onClick = { showColorMenu = true },
+            testTag = "format_color_button"
+        )
+        DropdownMenu(
+            expanded = showColorMenu,
+            onDismissRequest = { showColorMenu = false }
+        ) {
+            val colors = listOf(
+                null to "Default Ink",
+                "#182A6A" to "Navy Blue",
+                "#2B47B5" to "Royal Blue",
+                "#C92A2A" to "Crimson Red",
+                "#2B8A3E" to "Forest Green",
+                "#E67700" to "Deep Amber",
+                "#5F3DC4" to "Royal Purple",
+                "#495057" to "Slate Gray"
+            )
+            colors.forEach { (hex, label) ->
+                DropdownMenuItem(
+                    text = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(14.dp)
+                                    .clip(CircleShape)
+                                    .background(
+                                        if (hex != null) Color(android.graphics.Color.parseColor(hex))
+                                        else MaterialTheme.colorScheme.onSurface
+                                    )
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(label, fontSize = 13.sp)
+                        }
+                    },
+                    onClick = {
+                        activeBlock?.let { viewModel.updateBlockTextColor(it.id, hex) }
+                        showColorMenu = false
+                    }
+                )
+            }
+        }
+    }
+
+    var showHighlightMenu by remember { mutableStateOf(false) }
+    Box {
+        RibbonIconButton(
+            icon = Icons.Default.FormatColorFill,
+            label = "Highlight",
+            isSelected = !activeBlock?.highlightColorHex.isNullOrBlank(),
+            onClick = { showHighlightMenu = true },
+            testTag = "format_highlight_button"
+        )
+        DropdownMenu(expanded = showHighlightMenu, onDismissRequest = { showHighlightMenu = false }) {
+            listOf(
+                null to "No Highlight",
+                "#FFF3BF" to "Yellow Marker",
+                "#D3F9D8" to "Mint Green",
+                "#D0EBFF" to "Sky Blue",
+                "#FFE3E3" to "Soft Rose"
+            ).forEach { (hex, label) ->
+                DropdownMenuItem(
+                    text = { Text(label, fontSize = 13.sp) },
+                    onClick = {
+                        activeBlock?.let { viewModel.updateBlockHighlightColor(it.id, hex) }
+                        showHighlightMenu = false
+                    }
+                )
+            }
+        }
+    }
+
+    RibbonIconButton(
+        icon = Icons.Default.FormatClear,
+        label = "Clear Formatting",
+        onClick = { activeBlock?.let { viewModel.clearBlockFormatting(it.id) } },
+        testTag = "clear_formatting_button"
+    )
+
+    RibbonDivider()
+
+    // 4. Styles Dropdown Gallery
     var showStylesMenu by remember { mutableStateOf(false) }
     val currentStyleName = when (activeBlock?.type) {
         BlockType.TITLE -> "Title"
@@ -218,7 +508,7 @@ private fun HomeRibbonTools(
 
     RibbonDivider()
 
-    // Alignment buttons
+    // 5. Alignment & Indent buttons
     val currentAlign = activeBlock?.alignment ?: TextAlignment.LEFT
     RibbonIconButton(
         icon = Icons.Default.FormatAlignLeft,
@@ -248,10 +538,22 @@ private fun HomeRibbonTools(
         onClick = { activeBlock?.let { viewModel.updateBlockAlignment(it.id, TextAlignment.JUSTIFY) } },
         testTag = "align_justify_button"
     )
+    RibbonIconButton(
+        icon = Icons.Default.FormatIndentIncrease,
+        label = "Increase Indent",
+        onClick = { activeBlock?.let { viewModel.changeBlockIndent(it.id, +1) } },
+        testTag = "indent_increase_button"
+    )
+    RibbonIconButton(
+        icon = Icons.Default.FormatIndentDecrease,
+        label = "Decrease Indent",
+        onClick = { activeBlock?.let { viewModel.changeBlockIndent(it.id, -1) } },
+        testTag = "indent_decrease_button"
+    )
 
     RibbonDivider()
 
-    // List buttons
+    // 6. List buttons
     RibbonIconButton(
         icon = Icons.Default.FormatListBulleted,
         label = "Bullets",
@@ -291,7 +593,23 @@ private fun HomeRibbonTools(
 
     RibbonDivider()
 
-    // Paragraph add/delete actions
+    // 7. Quick Unicode & Translate shortcuts
+    RibbonActionButton(
+        icon = Icons.Default.Code,
+        label = "Ω Symbol",
+        onClick = { viewModel.setShowUnicodeDialog(true) },
+        testTag = "home_unicode_button"
+    )
+    RibbonActionButton(
+        icon = Icons.Default.Translate,
+        label = "Translate",
+        onClick = { viewModel.setShowTranslateDialog(true) },
+        testTag = "home_translate_button"
+    )
+
+    RibbonDivider()
+
+    // 8. Paragraph add/delete actions
     RibbonActionButton(
         icon = Icons.Default.Add,
         label = "Add Para",
@@ -313,7 +631,35 @@ private fun InsertRibbonTools(
     viewModel: WordCraftViewModel,
     activeBlock: com.example.model.DocBlock?
 ) {
-    var showTableDialog by remember { mutableStateOf(false) }
+    RibbonActionButton(
+        icon = Icons.Default.MenuBook,
+        label = "Cover Page",
+        onClick = { viewModel.insertCoverPage() },
+        testTag = "insert_cover_page_button"
+    )
+
+    RibbonActionButton(
+        icon = Icons.Default.Functions,
+        label = "π Equation",
+        onClick = { viewModel.setShowEquationDialog(true) },
+        testTag = "insert_equation_button"
+    )
+
+    RibbonActionButton(
+        icon = Icons.Default.Code,
+        label = "Ω Symbols",
+        onClick = { viewModel.setShowUnicodeDialog(true) },
+        testTag = "insert_unicode_button"
+    )
+
+    RibbonActionButton(
+        icon = Icons.Default.SwapHoriz,
+        label = "Alt+X",
+        onClick = { viewModel.convertTrailingHexInActiveBlock() },
+        testTag = "insert_alt_x_button"
+    )
+
+    RibbonDivider()
 
     RibbonActionButton(
         icon = Icons.Default.TableChart,
@@ -322,11 +668,44 @@ private fun InsertRibbonTools(
         testTag = "insert_table_button"
     )
 
+    RibbonActionButton(
+        icon = Icons.Default.BarChart,
+        label = "Chart / SmartArt",
+        onClick = { viewModel.setShowChartSmartArtDialog(true) },
+        testTag = "insert_chart_smartart_button"
+    )
+
+    var showShapeMenu by remember { mutableStateOf(false) }
+    Box {
+        RibbonActionButton(
+            icon = Icons.Default.BorderOuter,
+            label = "Shapes",
+            onClick = { showShapeMenu = true },
+            testTag = "insert_shapes_button"
+        )
+        DropdownMenu(expanded = showShapeMenu, onDismissRequest = { showShapeMenu = false }) {
+            listOf(
+                "Rounded Banner" to "ROUNDED_RECT",
+                "Rectangle Box" to "RECTANGLE",
+                "Oval Badge" to "OVAL",
+                "Decision Diamond" to "DIAMOND"
+            ).forEach { (label, kind) ->
+                DropdownMenuItem(
+                    text = { Text(label) },
+                    onClick = {
+                        viewModel.insertShapeBlock(kind, label)
+                        showShapeMenu = false
+                    }
+                )
+            }
+        }
+    }
+
     var showCalloutMenu by remember { mutableStateOf(false) }
     Box {
         RibbonActionButton(
             icon = Icons.Default.Info,
-            label = "Callout Note",
+            label = "Callout",
             onClick = { showCalloutMenu = true },
             testTag = "insert_callout_button"
         )
@@ -359,6 +738,28 @@ private fun InsertRibbonTools(
     }
 
     RibbonActionButton(
+        icon = Icons.Default.TextFields,
+        label = "Drop Cap",
+        isSelected = activeBlock?.dropCap == true,
+        onClick = { activeBlock?.let { viewModel.toggleBlockDropCap(it.id) } },
+        testTag = "insert_drop_cap_button"
+    )
+
+    RibbonActionButton(
+        icon = Icons.Default.VerifiedUser,
+        label = "Signature Line",
+        onClick = { viewModel.insertSignatureLineBlock() },
+        testTag = "insert_signature_button"
+    )
+
+    RibbonActionButton(
+        icon = Icons.Default.Schedule,
+        label = "Date & Time",
+        onClick = { viewModel.insertDateTimeStamp() },
+        testTag = "insert_datetime_button"
+    )
+
+    RibbonActionButton(
         icon = Icons.Default.ViewAgenda,
         label = "Divider Line",
         onClick = { viewModel.insertBlock(activeBlock?.id, BlockType.HORIZONTAL_RULE) },
@@ -377,6 +778,152 @@ private fun InsertRibbonTools(
         label = "Quote Block",
         onClick = { viewModel.insertBlock(activeBlock?.id, BlockType.QUOTE, "Your inspirational quote here...") },
         testTag = "insert_quote_button"
+    )
+}
+
+@Composable
+private fun DrawRibbonTools(viewModel: WordCraftViewModel) {
+    RibbonActionButton(
+        icon = Icons.Default.Brush,
+        label = "Freehand Ink Pad & Replay",
+        onClick = { viewModel.setShowDrawingDialog(true) },
+        testTag = "draw_ink_pad_button"
+    )
+
+    RibbonDivider()
+
+    RibbonActionButton(
+        icon = Icons.Default.BorderOuter,
+        label = "Ink to Shape",
+        onClick = { viewModel.insertShapeBlock("ROUNDED_RECT", "Converted Ink Shape") },
+        testTag = "draw_ink_to_shape_button"
+    )
+
+    RibbonActionButton(
+        icon = Icons.Default.Functions,
+        label = "Ink to Math",
+        onClick = { viewModel.setShowEquationDialog(true) },
+        testTag = "draw_ink_to_math_button"
+    )
+
+    RibbonActionButton(
+        icon = Icons.Default.Add,
+        label = "Drawing Canvas",
+        onClick = { viewModel.setShowDrawingDialog(true) },
+        testTag = "draw_canvas_button"
+    )
+}
+
+@Composable
+private fun DesignRibbonTools(viewModel: WordCraftViewModel) {
+    val doc by viewModel.document.collectAsState()
+
+    var showThemeMenu by remember { mutableStateOf(false) }
+    Box {
+        RibbonActionButton(
+            icon = Icons.Default.Palette,
+            label = "Theme: ${doc.themePreset.displayName}",
+            onClick = { showThemeMenu = true },
+            testTag = "design_theme_button"
+        )
+        DropdownMenu(expanded = showThemeMenu, onDismissRequest = { showThemeMenu = false }) {
+            DocumentThemePreset.values().forEach { preset ->
+                DropdownMenuItem(
+                    text = { Text("${preset.displayName} (${preset.headingFont} / ${preset.bodyFont})") },
+                    onClick = {
+                        viewModel.applyDocumentTheme(preset)
+                        showThemeMenu = false
+                    }
+                )
+            }
+        }
+    }
+
+    var showSpacingMenu by remember { mutableStateOf(false) }
+    Box {
+        RibbonActionButton(
+            icon = Icons.Default.ViewAgenda,
+            label = "Paragraph Spacing",
+            onClick = { showSpacingMenu = true },
+            testTag = "design_para_spacing_button"
+        )
+        DropdownMenu(expanded = showSpacingMenu, onDismissRequest = { showSpacingMenu = false }) {
+            listOf(
+                "Compact (1.0)" to 1.0f,
+                "Tight (1.15)" to 1.15f,
+                "Default (1.25)" to 1.25f,
+                "Open (1.5)" to 1.5f,
+                "Relaxed (1.75)" to 1.75f,
+                "Double (2.0)" to 2.0f
+            ).forEach { (label, spVal) ->
+                DropdownMenuItem(
+                    text = { Text(label) },
+                    onClick = {
+                        viewModel.setDocumentParagraphSpacing(spVal)
+                        showSpacingMenu = false
+                    }
+                )
+            }
+        }
+    }
+
+    RibbonDivider()
+
+    var showWatermarkMenu by remember { mutableStateOf(false) }
+    Box {
+        RibbonActionButton(
+            icon = Icons.Default.Bookmark,
+            label = if (doc.watermark != null) "Watermark: ${doc.watermark}" else "Watermark",
+            onClick = { showWatermarkMenu = true },
+            testTag = "design_watermark_button"
+        )
+        DropdownMenu(expanded = showWatermarkMenu, onDismissRequest = { showWatermarkMenu = false }) {
+            listOf(null, "DRAFT", "CONFIDENTIAL", "DO NOT COPY", "SAMPLE", "ASAP", "URGENT").forEach { w ->
+                DropdownMenuItem(
+                    text = { Text(w ?: "None (Remove)") },
+                    onClick = {
+                        viewModel.setWatermark(w)
+                        showWatermarkMenu = false
+                    }
+                )
+            }
+        }
+    }
+
+    var showPageColorMenu by remember { mutableStateOf(false) }
+    Box {
+        RibbonActionButton(
+            icon = Icons.Default.FormatColorFill,
+            label = "Page Color",
+            isSelected = doc.pageColorHex != null,
+            onClick = { showPageColorMenu = true },
+            testTag = "design_page_color_button"
+        )
+        DropdownMenu(expanded = showPageColorMenu, onDismissRequest = { showPageColorMenu = false }) {
+            listOf(
+                null to "Classic White Paper",
+                "#FFFDF7" to "Warm Ivory / Cream",
+                "#F1F3F5" to "Soft Studio Gray",
+                "#EDF2FF" to "Pale Blueprint Blue",
+                "#EBFBEE" to "Sage Mint Paper"
+            ).forEach { (hex, label) ->
+                DropdownMenuItem(
+                    text = { Text(label) },
+                    onClick = {
+                        viewModel.setPageColor(hex)
+                        showPageColorMenu = false
+                    }
+                )
+            }
+        }
+    }
+
+    RibbonActionButton(
+        icon = Icons.Default.BorderOuter,
+        label = if (doc.pageBorder) "Page Border ✓" else "Page Borders",
+        isSelected = doc.pageBorder,
+        onClick = { viewModel.togglePageBorder() },
+        testTag = "design_page_border_button"
     )
 }
 
@@ -447,47 +994,151 @@ private fun LayoutRibbonTools(viewModel: WordCraftViewModel) {
         }
     }
 
-    var showWatermarkMenu by remember { mutableStateOf(false) }
+    var showColumnsMenu by remember { mutableStateOf(false) }
     Box {
         RibbonActionButton(
-            icon = Icons.Default.Bookmark,
-            label = if (doc.watermark != null) "Watermark: ${doc.watermark}" else "Watermark",
-            onClick = { showWatermarkMenu = true },
-            testTag = "layout_watermark_button"
+            icon = Icons.Default.ViewColumn,
+            label = "Columns: ${doc.columns}",
+            onClick = { showColumnsMenu = true },
+            testTag = "layout_columns_button"
         )
-        DropdownMenu(expanded = showWatermarkMenu, onDismissRequest = { showWatermarkMenu = false }) {
-            listOf(null, "DRAFT", "CONFIDENTIAL", "SAMPLE", "URGENT").forEach { w ->
+        DropdownMenu(expanded = showColumnsMenu, onDismissRequest = { showColumnsMenu = false }) {
+            listOf(1 to "One Column", 2 to "Two Columns", 3 to "Three Columns").forEach { (c, label) ->
                 DropdownMenuItem(
-                    text = { Text(w ?: "None (Remove)") },
+                    text = { Text(label) },
                     onClick = {
-                        viewModel.setWatermark(w)
-                        showWatermarkMenu = false
+                        viewModel.setPageColumns(c)
+                        showColumnsMenu = false
                     }
                 )
             }
         }
     }
+
+    RibbonActionButton(
+        icon = Icons.Default.FormatListNumbered,
+        label = if (doc.showLineNumbers) "Line Numbers ✓" else "Line Numbers",
+        isSelected = doc.showLineNumbers,
+        onClick = { viewModel.toggleLineNumbers() },
+        testTag = "layout_line_numbers_button"
+    )
 }
 
 @Composable
-private fun ReviewRibbonTools(
-    viewModel: WordCraftViewModel,
-    activeBlock: com.example.model.DocBlock?
-) {
+private fun ReferencesRibbonTools(viewModel: WordCraftViewModel) {
+    val doc by viewModel.document.collectAsState()
+
+    RibbonActionButton(
+        icon = Icons.Default.MenuBook,
+        label = "Table of Contents",
+        onClick = { viewModel.insertTableOfContents() },
+        testTag = "refs_toc_button"
+    )
+
+    RibbonActionButton(
+        icon = Icons.Default.Add,
+        label = "Insert Footnote",
+        onClick = { viewModel.setShowReferencesDialog(true) },
+        testTag = "refs_footnote_button"
+    )
+
+    RibbonDivider()
+
+    RibbonActionButton(
+        icon = Icons.Default.Bookmark,
+        label = "Insert Citation (${doc.citationStyle})",
+        onClick = { viewModel.setShowReferencesDialog(true) },
+        testTag = "refs_citation_button"
+    )
+
+    RibbonActionButton(
+        icon = Icons.Default.MenuBook,
+        label = "Bibliography",
+        onClick = { viewModel.insertBibliographyBlock() },
+        testTag = "refs_bibliography_button"
+    )
+}
+
+@Composable
+private fun MailingsRibbonTools(viewModel: WordCraftViewModel) {
+    RibbonActionButton(
+        icon = Icons.Default.MailOutline,
+        label = "Start Mail Merge Studio",
+        onClick = { viewModel.setShowMailingsDialog(true) },
+        testTag = "mailings_studio_button"
+    )
+
+    RibbonDivider()
+
+    RibbonActionButton(
+        icon = Icons.Default.Add,
+        label = "Address Block",
+        onClick = { viewModel.insertMergeField("AddressBlock") },
+        testTag = "mailings_address_block_button"
+    )
+
+    RibbonActionButton(
+        icon = Icons.Default.Add,
+        label = "Greeting Line",
+        onClick = { viewModel.insertMergeField("GreetingLine") },
+        testTag = "mailings_greeting_line_button"
+    )
+
+    RibbonActionButton(
+        icon = Icons.Default.Code,
+        label = "«First_Name»",
+        onClick = { viewModel.insertMergeField("First_Name") },
+        testTag = "mailings_first_name_button"
+    )
+
+    RibbonActionButton(
+        icon = Icons.Default.Code,
+        label = "«Company»",
+        onClick = { viewModel.insertMergeField("Company") },
+        testTag = "mailings_company_button"
+    )
+}
+
+@Composable
+private fun ReviewRibbonTools(viewModel: WordCraftViewModel) {
+    val doc by viewModel.document.collectAsState()
     val showNav by viewModel.showNavPane.collectAsState()
     val showComments by viewModel.showCommentsPane.collectAsState()
     val isSpeaking by viewModel.isSpeaking.collectAsState()
 
     RibbonActionButton(
+        icon = Icons.Default.Translate,
+        label = "Google Translate",
+        onClick = { viewModel.setShowTranslateDialog(true) },
+        testTag = "review_translate_button"
+    )
+
+    RibbonActionButton(
+        icon = Icons.Default.Code,
+        label = "Unicode Inspector",
+        onClick = { viewModel.setShowUnicodeDialog(true) },
+        testTag = "review_unicode_button"
+    )
+
+    RibbonActionButton(
+        icon = Icons.Default.VerifiedUser,
+        label = "Check Accessibility",
+        onClick = { viewModel.setShowAccessibilityDialog(true) },
+        testTag = "review_a11y_button"
+    )
+
+    RibbonDivider()
+
+    RibbonActionButton(
         icon = Icons.Default.Info,
-        label = "Document Stats",
+        label = "Word Count",
         onClick = { viewModel.setShowStatsDialog(true) },
         testTag = "review_stats_button"
     )
 
     RibbonActionButton(
         icon = Icons.Default.Menu,
-        label = "Outline Navigation",
+        label = "Outline Pane",
         isSelected = showNav,
         onClick = { viewModel.toggleNavPane() },
         testTag = "review_outline_button"
@@ -495,10 +1146,26 @@ private fun ReviewRibbonTools(
 
     RibbonActionButton(
         icon = Icons.Default.Comment,
-        label = "Comments Pane",
+        label = "Comments",
         isSelected = showComments,
         onClick = { viewModel.toggleCommentsPane() },
         testTag = "review_comments_button"
+    )
+
+    RibbonActionButton(
+        icon = Icons.Default.TrackChanges,
+        label = if (doc.trackChanges) "Track Changes ✓" else "Track Changes",
+        isSelected = doc.trackChanges,
+        onClick = { viewModel.toggleTrackChanges() },
+        testTag = "review_track_changes_button"
+    )
+
+    RibbonActionButton(
+        icon = if (doc.readOnlyLocked) Icons.Default.Lock else Icons.Default.LockOpen,
+        label = if (doc.readOnlyLocked) "Locked (Read-Only)" else "Restrict Editing",
+        isSelected = doc.readOnlyLocked,
+        onClick = { viewModel.toggleReadOnlyLock() },
+        testTag = "review_restrict_editing_button"
     )
 
     RibbonActionButton(
@@ -512,6 +1179,7 @@ private fun ReviewRibbonTools(
 
 @Composable
 private fun ViewRibbonTools(viewModel: WordCraftViewModel) {
+    val doc by viewModel.document.collectAsState()
     val viewMode by viewModel.viewMode.collectAsState()
     val isDarkCanvas by viewModel.isDarkCanvas.collectAsState()
     val zoom by viewModel.zoomPercent.collectAsState()
@@ -526,7 +1194,7 @@ private fun ViewRibbonTools(viewModel: WordCraftViewModel) {
 
     RibbonActionButton(
         icon = Icons.Default.ViewAgenda,
-        label = "Continuous",
+        label = "Web Layout",
         isSelected = viewMode == ViewMode.WEB_LAYOUT,
         onClick = { viewModel.setViewMode(ViewMode.WEB_LAYOUT) },
         testTag = "view_continuous_button"
@@ -541,6 +1209,22 @@ private fun ViewRibbonTools(viewModel: WordCraftViewModel) {
     )
 
     RibbonDivider()
+
+    RibbonActionButton(
+        icon = Icons.Default.Straighten,
+        label = if (doc.showRuler) "Ruler ✓" else "Ruler",
+        isSelected = doc.showRuler,
+        onClick = { viewModel.toggleRuler() },
+        testTag = "view_ruler_button"
+    )
+
+    RibbonActionButton(
+        icon = Icons.Default.GridOn,
+        label = if (doc.showGridlines) "Gridlines ✓" else "Gridlines",
+        isSelected = doc.showGridlines,
+        onClick = { viewModel.toggleGridlines() },
+        testTag = "view_gridlines_button"
+    )
 
     RibbonActionButton(
         icon = if (isDarkCanvas) Icons.Default.LightMode else Icons.Default.DarkMode,
@@ -563,12 +1247,76 @@ private fun ViewRibbonTools(viewModel: WordCraftViewModel) {
 }
 
 @Composable
+private fun DeveloperRibbonTools(viewModel: WordCraftViewModel) {
+    RibbonActionButton(
+        icon = Icons.Default.TextFields,
+        label = "Rich Text Control",
+        onClick = { viewModel.insertContentControl("TEXT") },
+        testTag = "dev_text_control_button"
+    )
+
+    RibbonActionButton(
+        icon = Icons.Default.Checklist,
+        label = "Check Box Control",
+        onClick = { viewModel.insertContentControl("CHECKBOX") },
+        testTag = "dev_checkbox_control_button"
+    )
+
+    RibbonActionButton(
+        icon = Icons.Default.Schedule,
+        label = "Date Picker Control",
+        onClick = { viewModel.insertContentControl("DATE") },
+        testTag = "dev_date_control_button"
+    )
+
+    RibbonActionButton(
+        icon = Icons.Default.Menu,
+        label = "Drop-Down Control",
+        onClick = { viewModel.insertContentControl("DROPDOWN") },
+        testTag = "dev_dropdown_control_button"
+    )
+
+    RibbonDivider()
+
+    RibbonActionButton(
+        icon = Icons.Default.Code,
+        label = "UTF-8 & Codepoint Inspector",
+        onClick = { viewModel.setShowUnicodeDialog(true) },
+        testTag = "dev_unicode_inspector_button"
+    )
+}
+
+@Composable
+private fun HelpRibbonTools(viewModel: WordCraftViewModel) {
+    RibbonActionButton(
+        icon = Icons.Default.HelpOutline,
+        label = "Shortcuts & v0.7.0 Guide",
+        onClick = { viewModel.setShowAccessibilityDialog(true) },
+        testTag = "help_guide_button"
+    )
+
+    RibbonActionButton(
+        icon = Icons.Default.VerifiedUser,
+        label = "Accessibility Audit",
+        onClick = { viewModel.setShowAccessibilityDialog(true) },
+        testTag = "help_a11y_button"
+    )
+
+    RibbonActionButton(
+        icon = Icons.Default.Info,
+        label = "Document Statistics",
+        onClick = { viewModel.setShowStatsDialog(true) },
+        testTag = "help_stats_button"
+    )
+}
+
+@Composable
 private fun TableRibbonTools(
     viewModel: WordCraftViewModel,
     activeBlock: com.example.model.DocBlock?
 ) {
     if (activeBlock == null || activeBlock.type != BlockType.TABLE) {
-        Text("Select a table in the document to edit rows and columns.", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("Select a table in the document to edit rows, styles, and formulas.", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         return
     }
 
@@ -595,6 +1343,43 @@ private fun TableRibbonTools(
             testTag = "table_del_row_button"
         )
     }
+
+    RibbonDivider()
+
+    var showTableStyleMenu by remember { mutableStateOf(false) }
+    Box {
+        RibbonActionButton(
+            icon = Icons.Default.Palette,
+            label = "Table Style",
+            onClick = { showTableStyleMenu = true },
+            testTag = "table_style_button"
+        )
+        DropdownMenu(expanded = showTableStyleMenu, onDismissRequest = { showTableStyleMenu = false }) {
+            TableStyle.values().forEach { st ->
+                DropdownMenuItem(
+                    text = { Text(st.displayName) },
+                    onClick = {
+                        viewModel.updateTableStyle(activeBlock.id, st)
+                        showTableStyleMenu = false
+                    }
+                )
+            }
+        }
+    }
+
+    RibbonActionButton(
+        icon = Icons.Default.Functions,
+        label = "fx =SUM Row",
+        onClick = { viewModel.appendTableFormulaSummaryRow(activeBlock.id, "SUM") },
+        testTag = "table_formula_sum_button"
+    )
+
+    RibbonActionButton(
+        icon = Icons.Default.Functions,
+        label = "fx =AVG Row",
+        onClick = { viewModel.appendTableFormulaSummaryRow(activeBlock.id, "AVG") },
+        testTag = "table_formula_avg_button"
+    )
 
     RibbonActionButton(
         icon = Icons.Default.Delete,

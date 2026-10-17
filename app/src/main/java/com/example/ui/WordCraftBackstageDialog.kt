@@ -1,7 +1,6 @@
 package com.example.ui
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -25,6 +24,7 @@ import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.NoteAdd
+import androidx.compose.material.icons.filled.Print
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Button
@@ -65,14 +65,17 @@ import com.example.viewmodel.WordCraftViewModel
 enum class BackstagePage {
     NEW,
     OPEN,
+    INFO,
     SAVE,
-    EXPORT,
-    INFO
+    PRINT,
+    EXPORT
 }
 
 @Composable
 fun WordCraftBackstageDialog(
     viewModel: WordCraftViewModel,
+    onImportFileClick: () -> Unit,
+    onPrintClick: () -> Unit,
     onExportFormat: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -89,10 +92,10 @@ fun WordCraftBackstageDialog(
             color = MaterialTheme.colorScheme.background
         ) {
             Row(modifier = Modifier.fillMaxSize()) {
-                // Backstage Left Navigation Rail (Word signature blue sidebar)
+                // Backstage Left Navigation Rail
                 Surface(
                     modifier = Modifier
-                        .width(220.dp)
+                        .width(210.dp)
                         .fillMaxHeight(),
                     color = WordCraftPrimaryDark
                 ) {
@@ -101,7 +104,6 @@ fun WordCraftBackstageDialog(
                             .fillMaxSize()
                             .padding(vertical = 16.dp, horizontal = 12.dp)
                     ) {
-                        // Back Arrow
                         IconButton(
                             onClick = onDismiss,
                             modifier = Modifier
@@ -116,7 +118,7 @@ fun WordCraftBackstageDialog(
                             )
                         }
 
-                        Spacer(modifier = Modifier.height(16.dp))
+                        Spacer(modifier = Modifier.height(12.dp))
 
                         Text(
                             text = "WordCraft",
@@ -126,15 +128,14 @@ fun WordCraftBackstageDialog(
                             modifier = Modifier.padding(horizontal = 8.dp)
                         )
                         Text(
-                            text = "Backstage",
-                            color = Color.White.copy(alpha = 0.6f),
+                            text = "Studio v0.7.0",
+                            color = Color.White.copy(alpha = 0.65f),
                             fontSize = 12.sp,
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
                         )
 
-                        Spacer(modifier = Modifier.height(24.dp))
+                        Spacer(modifier = Modifier.height(20.dp))
 
-                        // Navigation Items
                         BackstageNavItem(
                             icon = Icons.Default.NoteAdd,
                             label = "New",
@@ -145,7 +146,7 @@ fun WordCraftBackstageDialog(
 
                         BackstageNavItem(
                             icon = Icons.Default.FolderOpen,
-                            label = "Open",
+                            label = "Open / Import",
                             isSelected = currentPage == BackstagePage.OPEN,
                             onClick = { currentPage = BackstagePage.OPEN },
                             testTag = "backstage_nav_open"
@@ -153,7 +154,7 @@ fun WordCraftBackstageDialog(
 
                         BackstageNavItem(
                             icon = Icons.Default.Info,
-                            label = "Info",
+                            label = "Info & Inspect",
                             isSelected = currentPage == BackstagePage.INFO,
                             onClick = { currentPage = BackstagePage.INFO },
                             testTag = "backstage_nav_info"
@@ -168,6 +169,14 @@ fun WordCraftBackstageDialog(
                                 currentPage = BackstagePage.SAVE
                             },
                             testTag = "backstage_nav_save"
+                        )
+
+                        BackstageNavItem(
+                            icon = Icons.Default.Print,
+                            label = "Print & PDF",
+                            isSelected = currentPage == BackstagePage.PRINT,
+                            onClick = { currentPage = BackstagePage.PRINT },
+                            testTag = "backstage_nav_print"
                         )
 
                         BackstageNavItem(
@@ -190,9 +199,10 @@ fun WordCraftBackstageDialog(
                 ) {
                     when (currentPage) {
                         BackstagePage.NEW -> NewTemplatesPage(viewModel, onDismiss)
-                        BackstagePage.OPEN -> OpenDocPage(viewModel, doc, onDismiss)
-                        BackstagePage.INFO -> InfoPropertiesPage(doc, stats)
-                        BackstagePage.SAVE -> SaveStatusPage(viewModel, doc, onDismiss)
+                        BackstagePage.OPEN -> OpenDocPage(doc, onImportFileClick, onDismiss)
+                        BackstagePage.INFO -> InfoPropertiesPage(viewModel, doc, stats, onDismiss)
+                        BackstagePage.SAVE -> SaveStatusPage(doc, onExportFormat, onDismiss)
+                        BackstagePage.PRINT -> PrintDocPage(doc, onPrintClick, onExportFormat)
                         BackstagePage.EXPORT -> ExportDocPage(onExportFormat)
                     }
                 }
@@ -373,8 +383,8 @@ private data class TemplateItem(
 
 @Composable
 private fun OpenDocPage(
-    viewModel: WordCraftViewModel,
     currentDoc: WordCraftDoc,
+    onImportFileClick: () -> Unit,
     onDismiss: () -> Unit
 ) {
     Column(
@@ -382,19 +392,49 @@ private fun OpenDocPage(
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
     ) {
-        Text("Current & Recent Documents", fontSize = 24.sp, fontWeight = FontWeight.Bold)
-        Spacer(modifier = Modifier.height(16.dp))
+        Text("Open & Import Document", fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        Text(
+            text = "Import DOCX, Markdown (.md), HTML, or Text files from your device storage",
+            fontSize = 14.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
+        )
+
+        Card(
+            modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text("Browse Device Storage", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                Text(
+                    "Supports .docx (OpenXML), .md (Markdown), .html, and .txt files.",
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(vertical = 4.dp)
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Button(
+                    onClick = onImportFileClick,
+                    colors = ButtonDefaults.buttonColors(containerColor = WordCraftPrimary),
+                    modifier = Modifier.testTag("import_file_button")
+                ) {
+                    Icon(Icons.Default.FolderOpen, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Choose File from Device...")
+                }
+            }
+        }
 
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
-                Text("Currently Active:", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("Currently Active Document:", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text(currentDoc.title, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = WordCraftPrimary)
                 Text("Author: ${currentDoc.author} • ${currentDoc.blocks.size} blocks", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(modifier = Modifier.height(12.dp))
-                Button(onClick = onDismiss) {
+                OutlinedButton(onClick = onDismiss) {
                     Text("Continue Editing")
                 }
             }
@@ -404,15 +444,36 @@ private fun OpenDocPage(
 
 @Composable
 private fun InfoPropertiesPage(
+    viewModel: WordCraftViewModel,
     doc: WordCraftDoc,
-    stats: DocumentStats
+    stats: DocumentStats,
+    onDismiss: () -> Unit
 ) {
     Column(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
     ) {
-        Text("Document Properties & Statistics", fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        Text("Document Properties & Inspector", fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(
+                onClick = {
+                    onDismiss()
+                    viewModel.setShowAccessibilityDialog(true)
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = WordCraftPrimary)
+            ) {
+                Text("Run Accessibility Checker")
+            }
+            OutlinedButton(
+                onClick = { viewModel.toggleReadOnlyLock() }
+            ) {
+                Text(if (doc.readOnlyLocked) "Unlock Document" else "Protect Document (Read-Only)")
+            }
+        }
+
         Spacer(modifier = Modifier.height(16.dp))
 
         Card(
@@ -422,15 +483,17 @@ private fun InfoPropertiesPage(
             Column(modifier = Modifier.padding(16.dp)) {
                 PropRow("Title", doc.title)
                 PropRow("Author", doc.author)
+                PropRow("Theme Preset", doc.themePreset.displayName)
                 PropRow("Word Count", "${stats.words} words")
                 PropRow("Character Count", "${stats.characters} (${stats.charactersNoSpaces} without spaces)")
                 PropRow("Paragraphs", "${stats.paragraphs} paragraphs")
                 PropRow("Estimated Read Time", String.format("%.1f minutes", stats.readingTimeMinutes))
-                PropRow("Page Layout", "${doc.pageSize.displayName} • ${doc.orientation.name.lowercase().capitalize()}")
-                PropRow("Margins", doc.margins.displayName)
+                PropRow("Page Layout", "${doc.pageSize.displayName} • ${doc.orientation.name}")
+                PropRow("Margins & Columns", "${doc.margins.displayName} • ${doc.columns} col(s)")
+                PropRow("Track Changes", if (doc.trackChanges) "Enabled" else "Off")
+                PropRow("Protection Status", if (doc.readOnlyLocked) "Locked (Read-Only)" else "Editable")
+                PropRow("Citation Style", "${doc.citationStyle} (${doc.sources.size} sources)")
                 PropRow("Watermark", doc.watermark ?: "None")
-                PropRow("Header", doc.headerText ?: "None")
-                PropRow("Footer", doc.footerText ?: "None")
             }
         }
     }
@@ -452,8 +515,8 @@ private fun PropRow(label: String, value: String) {
 
 @Composable
 private fun SaveStatusPage(
-    viewModel: WordCraftViewModel,
     doc: WordCraftDoc,
+    onExportFormat: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
     Column(
@@ -468,12 +531,74 @@ private fun SaveStatusPage(
             fontSize = 15.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-        Spacer(modifier = Modifier.height(24.dp))
-        Button(
-            onClick = onDismiss,
-            colors = ButtonDefaults.buttonColors(containerColor = WordCraftPrimary)
+        Spacer(modifier = Modifier.height(20.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Button(
+                onClick = onDismiss,
+                colors = ButtonDefaults.buttonColors(containerColor = WordCraftPrimary)
+            ) {
+                Text("Back to Document")
+            }
+            OutlinedButton(onClick = { onExportFormat("docx") }) {
+                Text("Save Copy as .DOCX")
+            }
+            OutlinedButton(onClick = { onExportFormat("pdf") }) {
+                Text("Save Copy as .PDF")
+            }
+        }
+    }
+}
+
+@Composable
+private fun PrintDocPage(
+    doc: WordCraftDoc,
+    onPrintClick: () -> Unit,
+    onExportFormat: (String) -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+    ) {
+        Text("Print & PDF Studio", fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        Text(
+            text = "Print directly using Android Print Services or generate a multi-page PDF document",
+            fontSize = 14.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 4.dp, bottom = 20.dp)
+        )
+
+        Card(
+            modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
         ) {
-            Text("Back to Document")
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text("Android System Print Spooler", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                Text(
+                    "Page Setup: ${doc.pageSize.displayName} • ${doc.orientation.name} • ${doc.margins.displayName}",
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(vertical = 4.dp)
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Button(
+                        onClick = onPrintClick,
+                        colors = ButtonDefaults.buttonColors(containerColor = WordCraftPrimary),
+                        modifier = Modifier.testTag("print_system_button")
+                    ) {
+                        Icon(Icons.Default.Print, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Print Document")
+                    }
+                    OutlinedButton(
+                        onClick = { onExportFormat("pdf") },
+                        modifier = Modifier.testTag("print_export_pdf_button")
+                    ) {
+                        Text("Export Multi-Page PDF")
+                    }
+                }
+            }
         }
     }
 }
@@ -487,46 +612,50 @@ private fun ExportDocPage(
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
     ) {
-        Text("Export & Share", fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        Text("Export & Share (WordCraft Web v0.7.0 Formats)", fontSize = 24.sp, fontWeight = FontWeight.Bold)
         Text(
-            text = "Export your document in open formats or share it directly to other apps",
+            text = "Export your document in any of the 8 supported WordCraft formats",
             fontSize = 14.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 4.dp, bottom = 20.dp)
+            modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
         )
 
         val formats = listOf(
-            Triple("DOCX", "Microsoft Word Open XML format (.docx). Opens in Word, Google Docs, and LibreOffice.", "docx"),
-            Triple("Markdown", "Clean markdown text (.md) with headings, bullet lists, tables, and blockquotes.", "md"),
-            Triple("HTML", "Formatted web document (.html) ready for publishing or browser viewing.", "html"),
-            Triple("Plain Text", "Simple UTF-8 text (.txt) without markup.", "txt")
+            Triple("PDF Document (.pdf)", "Paginated vector PDF with headers, footers, watermarks, tables, and charts.", "pdf"),
+            Triple("Word OpenXML (.docx)", "Microsoft Word format with custom fonts, styles, colors, and tables.", "docx"),
+            Triple("OpenDocument Text (.odt)", "OASIS OpenDocument format for LibreOffice and OpenOffice.", "odt"),
+            Triple("Rich Text Format (.rtf)", "Universal cross-platform rich text with color tables and formatting.", "rtf"),
+            Triple("LaTeX Source (.tex)", "Academic LaTeX article source with equations, sections, and tables.", "tex"),
+            Triple("Markdown (.md)", "Clean Markdown text with headings, checklists, tables, and quotes.", "md"),
+            Triple("Web Page (.html)", "Self-contained HTML5 document with Google Fonts and embedded styles.", "html"),
+            Triple("Plain Text (.txt)", "Simple UTF-8 plain text without markup.", "txt")
         )
 
         formats.forEach { (name, desc, ext) ->
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 6.dp)
+                    .padding(vertical = 5.dp)
                     .clickable { onExportFormat(ext) }
                     .testTag("export_$ext"),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
             ) {
                 Row(
-                    modifier = Modifier.padding(16.dp),
+                    modifier = Modifier.padding(14.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
                         imageVector = Icons.Default.Share,
                         contentDescription = name,
                         tint = WordCraftPrimary,
-                        modifier = Modifier.size(24.dp)
+                        modifier = Modifier.size(22.dp)
                     )
-                    Spacer(modifier = Modifier.width(16.dp))
+                    Spacer(modifier = Modifier.width(14.dp))
                     Column(modifier = Modifier.weight(1f)) {
-                        Text(name, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                        Text(desc, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(name, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                        Text(desc, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    Spacer(modifier = Modifier.width(12.dp))
+                    Spacer(modifier = Modifier.width(10.dp))
                     OutlinedButton(onClick = { onExportFormat(ext) }) {
                         Text("Export")
                     }
@@ -535,6 +664,3 @@ private fun ExportDocPage(
         }
     }
 }
-
-private fun String.capitalize(): String =
-    this.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
