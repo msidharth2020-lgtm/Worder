@@ -62,11 +62,19 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.testTag
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.OffsetMapping
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.input.TransformedText
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
@@ -81,6 +89,7 @@ import com.example.model.SmartArtData
 import com.example.model.TableData
 import com.example.model.TableStyle
 import com.example.model.TextAlignment
+import com.example.model.TextSpan
 import com.example.ui.theme.WordCraftCanvasDark
 import com.example.ui.theme.WordCraftCanvasLight
 import com.example.ui.theme.WordCraftFonts
@@ -281,51 +290,62 @@ fun WordCraftCanvas(
                             Divider(color = textMutedColor.copy(alpha = 0.2f), modifier = Modifier.padding(bottom = 16.dp))
                         }
 
-                        // Blocks rendering (supports Line Numbers & Track Changes gutter)
+                        // Blocks rendering (supports Line Numbers, Track Changes gutter, and Floating Selection/Hover Toolbar)
                         doc.blocks.forEachIndexed { index, block ->
                             val isActive = block.id == activeBlockId
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.Top
-                            ) {
-                                if (doc.showLineNumbers) {
-                                    Text(
-                                        text = "${index + 1}",
-                                        fontSize = 11.sp,
-                                        fontFamily = FontFamily.Monospace,
-                                        color = textMutedColor.copy(alpha = 0.7f),
-                                        modifier = Modifier
-                                            .width(28.dp)
-                                            .padding(top = 6.dp),
-                                        textAlign = TextAlign.End
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
+                            Column(modifier = Modifier.fillMaxWidth()) {
+                                if (isActive && viewMode != ViewMode.READING_MODE) {
+                                    WordCraftSelectionHoverToolbar(viewModel = viewModel)
                                 }
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.Top
+                                ) {
+                                    if (doc.showLineNumbers) {
+                                        Text(
+                                            text = "${index + 1}",
+                                            fontSize = 11.sp,
+                                            fontFamily = FontFamily.Monospace,
+                                            color = textMutedColor.copy(alpha = 0.7f),
+                                            modifier = Modifier
+                                                .width(28.dp)
+                                                .padding(top = 6.dp),
+                                            textAlign = TextAlign.End
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                    }
 
-                                if (doc.trackChanges && isActive) {
-                                    Box(
-                                        modifier = Modifier
-                                            .width(3.dp)
-                                            .height(32.dp)
-                                            .background(Color(0xFFD9480F), RoundedCornerShape(2.dp))
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                }
+                                    if (doc.trackChanges && isActive) {
+                                        Box(
+                                            modifier = Modifier
+                                                .width(3.dp)
+                                                .height(32.dp)
+                                                .background(Color(0xFFD9480F), RoundedCornerShape(2.dp))
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                    }
 
-                                Box(modifier = Modifier.weight(1f)) {
-                                    DocBlockItem(
-                                        block = block,
-                                        isActive = isActive,
-                                        readOnly = doc.readOnlyLocked || viewMode == ViewMode.READING_MODE,
-                                        zoomPercent = zoom,
-                                        textPrimaryColor = textPrimaryColor,
-                                        textMutedColor = textMutedColor,
-                                        onBlockClick = { viewModel.setActiveBlockId(block.id) },
-                                        onTextChange = { newText -> viewModel.updateBlockText(block.id, newText) },
-                                        onToggleChecklist = { viewModel.toggleChecklist(block.id) },
-                                        onTableCellChange = { r, c, valText -> viewModel.updateTableCell(block.id, r, c, valText) },
-                                        onOpenDrawingStudio = { viewModel.setShowDrawingDialog(true) }
-                                    )
+                                    Box(modifier = Modifier.weight(1f)) {
+                                        DocBlockItem(
+                                            block = block,
+                                            isActive = isActive,
+                                            readOnly = doc.readOnlyLocked || viewMode == ViewMode.READING_MODE,
+                                            zoomPercent = zoom,
+                                            textPrimaryColor = textPrimaryColor,
+                                            textMutedColor = textMutedColor,
+                                            onBlockClick = {
+                                                viewModel.setActiveBlockId(block.id)
+                                                viewModel.updateSelectionOrHover(block.id, block.text, 0, 0)
+                                            },
+                                            onTextChange = { newText -> viewModel.updateBlockText(block.id, newText) },
+                                            onSelectionOrHoverChange = { txt, s, e ->
+                                                viewModel.updateSelectionOrHover(block.id, txt, s, e)
+                                            },
+                                            onToggleChecklist = { viewModel.toggleChecklist(block.id) },
+                                            onTableCellChange = { r, c, valText -> viewModel.updateTableCell(block.id, r, c, valText) },
+                                            onOpenDrawingStudio = { viewModel.setShowDrawingDialog(true) }
+                                        )
+                                    }
                                 }
                             }
                             Spacer(modifier = Modifier.height(6.dp))
@@ -423,6 +443,9 @@ private fun WordCraftHorizontalRuler(
     }
 }
 
+private val LocalBlockSpans = compositionLocalOf<List<TextSpan>> { emptyList() }
+private val LocalBlockSelectionCallback = compositionLocalOf<(String, Int, Int) -> Unit> { { _, _, _ -> } }
+
 @Composable
 private fun DocBlockItem(
     block: DocBlock,
@@ -433,6 +456,7 @@ private fun DocBlockItem(
     textMutedColor: Color,
     onBlockClick: () -> Unit,
     onTextChange: (String) -> Unit,
+    onSelectionOrHoverChange: (String, Int, Int) -> Unit,
     onToggleChecklist: () -> Unit,
     onTableCellChange: (Int, Int, String) -> Unit,
     onOpenDrawingStudio: () -> Unit
@@ -473,6 +497,10 @@ private fun DocBlockItem(
         if (list.isEmpty()) TextDecoration.None else TextDecoration.combine(list)
     }
 
+    CompositionLocalProvider(
+        LocalBlockSpans provides block.spans,
+        LocalBlockSelectionCallback provides onSelectionOrHoverChange
+    ) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -921,6 +949,7 @@ private fun DocBlockItem(
             }
         }
     }
+    }
 }
 
 @Composable
@@ -1170,6 +1199,40 @@ private fun SignatureLineRenderer(
     }
 }
 
+private fun buildStyledAnnotatedString(text: String, spans: List<TextSpan>): AnnotatedString {
+    return buildAnnotatedString {
+        append(text)
+        for (sp in spans) {
+            val s = sp.start.coerceIn(0, text.length)
+            val e = sp.end.coerceIn(0, text.length)
+            if (e > s) {
+                val bg = sp.highlightHex?.let {
+                    runCatching { Color(android.graphics.Color.parseColor(it)) }.getOrNull()
+                } ?: Color.Unspecified
+                val fg = sp.colorHex?.let {
+                    runCatching { Color(android.graphics.Color.parseColor(it)) }.getOrNull()
+                } ?: Color.Unspecified
+                val decList = mutableListOf<TextDecoration>()
+                if (sp.underline) decList.add(TextDecoration.Underline)
+                if (sp.strikethrough) decList.add(TextDecoration.LineThrough)
+                val dec = if (decList.isEmpty()) null else TextDecoration.combine(decList)
+
+                addStyle(
+                    style = SpanStyle(
+                        background = bg,
+                        color = fg,
+                        fontWeight = if (sp.bold) FontWeight.Bold else null,
+                        fontStyle = if (sp.italic) FontStyle.Italic else null,
+                        textDecoration = dec
+                    ),
+                    start = s,
+                    end = e
+                )
+            }
+        }
+    }
+}
+
 @Composable
 private fun EditableText(
     text: String,
@@ -1184,14 +1247,23 @@ private fun EditableText(
     textAlign: TextAlign,
     isActive: Boolean
 ) {
+    val spans = LocalBlockSpans.current
+    val onSelectionOrHoverChange = LocalBlockSelectionCallback.current
+
     if (isActive) {
         var tfv by remember(isActive) {
             mutableStateOf(
                 TextFieldValue(
                     text = text,
-                    selection = TextRange(text.length)
+                    selection = TextRange(0, text.indexOf(' ').takeIf { it > 0 } ?: text.length)
                 )
             )
+        }
+
+        LaunchedEffect(isActive) {
+            if (isActive && text.isNotBlank()) {
+                onSelectionOrHoverChange(text, tfv.selection.start, tfv.selection.end)
+            }
         }
 
         LaunchedEffect(text) {
@@ -1200,14 +1272,32 @@ private fun EditableText(
             }
         }
 
+        val spanVisualTransformation = remember(spans) {
+            if (spans.isEmpty()) {
+                VisualTransformation.None
+            } else {
+                VisualTransformation { rawAnnotated ->
+                    TransformedText(
+                        text = buildStyledAnnotatedString(rawAnnotated.text, spans),
+                        offsetMapping = OffsetMapping.Identity
+                    )
+                }
+            }
+        }
+
         OutlinedTextField(
             value = tfv,
             onValueChange = { newValue ->
+                val selChanged = newValue.selection != tfv.selection
                 tfv = newValue
                 if (newValue.text != text) {
                     onTextChange(newValue.text)
                 }
+                if (selChanged || newValue.text != text) {
+                    onSelectionOrHoverChange(newValue.text, newValue.selection.start, newValue.selection.end)
+                }
             },
+            visualTransformation = spanVisualTransformation,
             modifier = Modifier.fillMaxWidth(),
             textStyle = MaterialTheme.typography.bodyLarge.copy(
                 fontSize = fontSize,
@@ -1227,8 +1317,11 @@ private fun EditableText(
             )
         )
     } else {
+        val displayAnnotated = remember(text, spans) {
+            if (text.isBlank()) AnnotatedString(" ") else buildStyledAnnotatedString(text, spans)
+        }
         Text(
-            text = if (text.isBlank()) " " else text,
+            text = displayAnnotated,
             fontSize = fontSize,
             fontWeight = fontWeight ?: FontWeight.Normal,
             fontStyle = fontStyle ?: FontStyle.Normal,

@@ -6,7 +6,11 @@ import android.content.SharedPreferences
 import android.speech.tts.TextToSpeech
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.export.CslStyle
+import com.example.export.DictionaryAndZoteroService
 import com.example.export.TranslationService
+import com.example.export.WordDefinitionResult
+import com.example.export.ZoteroItem
 import com.example.model.BlockType
 import com.example.model.CalloutType
 import com.example.model.ChartData
@@ -23,6 +27,7 @@ import com.example.model.SmartArtData
 import com.example.model.TableData
 import com.example.model.TableStyle
 import com.example.model.TextAlignment
+import com.example.model.TextSpan
 import com.example.model.UnicodeCatalog
 import com.example.model.WordCraftDoc
 import com.example.model.WordCraftTemplates
@@ -45,6 +50,7 @@ enum class RibbonTab(val label: String) {
     LAYOUT("Layout"),
     REFERENCES("References"),
     MAILINGS("Mailings"),
+    ZOTERO("Zotero"),
     REVIEW("Review"),
     VIEW("View"),
     DEVELOPER("Developer"),
@@ -117,6 +123,53 @@ class WordCraftViewModel(application: Application) : AndroidViewModel(applicatio
 
     private val _showAccessibilityDialog = MutableStateFlow(false)
     val showAccessibilityDialog: StateFlow<Boolean> = _showAccessibilityDialog.asStateFlow()
+
+    // Zotero Add-on State (wordcraft-web-0.7.0 Zotero Tab & Dialog)
+    private val _showZoteroDialog = MutableStateFlow(false)
+    val showZoteroDialog: StateFlow<Boolean> = _showZoteroDialog.asStateFlow()
+
+    private val _zoteroItems = MutableStateFlow(DictionaryAndZoteroService.defaultZoteroItems)
+    val zoteroItems: StateFlow<List<ZoteroItem>> = _zoteroItems.asStateFlow()
+
+    private val _zoteroCslStyle = MutableStateFlow(CslStyle.APA_7)
+    val zoteroCslStyle: StateFlow<CslStyle> = _zoteroCslStyle.asStateFlow()
+
+    private val _zoteroStoreRefsInDoc = MutableStateFlow(true)
+    val zoteroStoreRefsInDoc: StateFlow<Boolean> = _zoteroStoreRefsInDoc.asStateFlow()
+
+    private val _zoteroSearchResults = MutableStateFlow<List<ZoteroItem>>(emptyList())
+    val zoteroSearchResults: StateFlow<List<ZoteroItem>> = _zoteroSearchResults.asStateFlow()
+
+    private val _isSearchingZotero = MutableStateFlow(false)
+    val isSearchingZotero: StateFlow<Boolean> = _isSearchingZotero.asStateFlow()
+
+    private val _zoteroStatusMessage = MutableStateFlow<String?>(null)
+    val zoteroStatusMessage: StateFlow<String?> = _zoteroStatusMessage.asStateFlow()
+
+    // Text Selection & Word Hover Inspector State
+    private val _selectedTextRange = MutableStateFlow<Pair<Int, Int>?>(null)
+    val selectedTextRange: StateFlow<Pair<Int, Int>?> = _selectedTextRange.asStateFlow()
+
+    private val _selectedOrHoveredWord = MutableStateFlow("")
+    val selectedOrHoveredWord: StateFlow<String> = _selectedOrHoveredWord.asStateFlow()
+
+    private val _hoverToolbarExpandedTab = MutableStateFlow<String?>(null) // null, "DEFINE", "TRANSLATE", "HIGHLIGHT", "FONT"
+    val hoverToolbarExpandedTab: StateFlow<String?> = _hoverToolbarExpandedTab.asStateFlow()
+
+    private val _wordDefinition = MutableStateFlow<WordDefinitionResult?>(null)
+    val wordDefinition: StateFlow<WordDefinitionResult?> = _wordDefinition.asStateFlow()
+
+    private val _isLoadingDefinition = MutableStateFlow(false)
+    val isLoadingDefinition: StateFlow<Boolean> = _isLoadingDefinition.asStateFlow()
+
+    private val _inlineTranslationResult = MutableStateFlow<String?>(null)
+    val inlineTranslationResult: StateFlow<String?> = _inlineTranslationResult.asStateFlow()
+
+    private val _isInlineTranslating = MutableStateFlow(false)
+    val isInlineTranslating: StateFlow<Boolean> = _isInlineTranslating.asStateFlow()
+
+    private val _inlineTargetLang = MutableStateFlow("es")
+    val inlineTargetLang: StateFlow<String> = _inlineTargetLang.asStateFlow()
 
     private val _isTranslating = MutableStateFlow(false)
     val isTranslating: StateFlow<Boolean> = _isTranslating.asStateFlow()
@@ -200,6 +253,55 @@ class WordCraftViewModel(application: Application) : AndroidViewModel(applicatio
             _canRedo.value = redoStack.isNotEmpty()
             saveCurrentDocument()
         }
+    }
+
+    fun getActiveBlock(): DocBlock? {
+        val activeId = _activeBlockId.value
+        return _document.value.blocks.find { it.id == activeId } ?: _document.value.blocks.firstOrNull()
+    }
+
+    fun stepBlockFontSize(deltaSp: Int) {
+        _activeBlockId.value?.let { stepBlockFontSize(it, deltaSp) }
+    }
+
+    fun updateBlockFontFamily(fontFamily: String) {
+        _activeBlockId.value?.let { updateBlockFontFamily(it, fontFamily) }
+    }
+
+    fun updateBlockFontSize(fontSizeSp: Int) {
+        _activeBlockId.value?.let { updateBlockFontSize(it, fontSizeSp) }
+    }
+
+    fun updateBlockAlignment(alignment: TextAlignment) {
+        _activeBlockId.value?.let { updateBlockAlignment(it, alignment) }
+    }
+
+    fun clearBlockFormatting() {
+        _activeBlockId.value?.let { clearBlockFormatting(it) }
+    }
+
+    fun toggleBlockBold() {
+        _activeBlockId.value?.let { toggleBlockBold(it) }
+    }
+
+    fun toggleBlockItalic() {
+        _activeBlockId.value?.let { toggleBlockItalic(it) }
+    }
+
+    fun toggleBlockUnderline() {
+        _activeBlockId.value?.let { toggleBlockUnderline(it) }
+    }
+
+    fun toggleBlockStrikethrough() {
+        _activeBlockId.value?.let { toggleBlockStrikethrough(it) }
+    }
+
+    fun updateBlockHighlightColor(highlightHex: String?) {
+        _activeBlockId.value?.let { updateBlockHighlightColor(it, highlightHex) }
+    }
+
+    fun updateBlockTextColor(colorHex: String?) {
+        _activeBlockId.value?.let { updateBlockTextColor(it, colorHex) }
     }
 
     fun setActiveRibbonTab(tab: RibbonTab) {
@@ -1206,6 +1308,472 @@ class WordCraftViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
+    // =========================================================================
+    // Zotero Add-on Operations (wordcraft-web-0.7.0 `fn zotero`)
+    // =========================================================================
+
+    fun setShowZoteroDialog(show: Boolean) {
+        _showZoteroDialog.value = show
+    }
+
+    fun setZoteroCslStyle(style: CslStyle) {
+        _zoteroCslStyle.value = style
+        _document.value = _document.value.copy(citationStyle = style.displayName)
+        refreshZoteroCitations()
+    }
+
+    fun toggleZoteroStoreRefs() {
+        _zoteroStoreRefsInDoc.value = !_zoteroStoreRefsInDoc.value
+        _zoteroStatusMessage.value = if (_zoteroStoreRefsInDoc.value) {
+            "Zotero references stored inside document metadata"
+        } else {
+            "Zotero references linked externally"
+        }
+    }
+
+    fun addZoteroItem(item: ZoteroItem) {
+        _zoteroItems.value = listOf(item) + _zoteroItems.value
+        _zoteroStatusMessage.value = "Added \"${item.title}\" (${item.year}) to Zotero library"
+    }
+
+    fun searchZoteroCrossRef(query: String) {
+        if (query.isBlank()) return
+        viewModelScope.launch {
+            _isSearchingZotero.value = true
+            _zoteroStatusMessage.value = "Searching CrossRef / Zotero catalog for \"$query\"..."
+            val results = DictionaryAndZoteroService.searchZoteroCrossRef(query)
+            _zoteroSearchResults.value = results
+            _isSearchingZotero.value = false
+            _zoteroStatusMessage.value = if (results.isNotEmpty()) {
+                "Found ${results.size} scholarly works via CrossRef DOI catalog"
+            } else {
+                "No external matches found; you can add a custom Zotero item below."
+            }
+        }
+    }
+
+    fun insertZoteroCitation(item: ZoteroItem, locatorPage: String = "") {
+        if (_document.value.readOnlyLocked) return
+        val style = _zoteroCslStyle.value
+        val idx = (_zoteroItems.value.indexOfFirst { it.id == item.id }.takeIf { it >= 0 } ?: 0) + 1
+        val formatted = item.formatInTextCitation(style, idx, locatorPage)
+        insertUnicodeSymbol(" $formatted")
+        _zoteroStatusMessage.value = "Inserted Zotero citation: $formatted"
+    }
+
+    fun insertZoteroNote(item: ZoteroItem) {
+        if (_document.value.readOnlyLocked) return
+        pushUndo()
+        val noteText = if (item.note.isNotBlank()) {
+            "Zotero Note (${item.author}, ${item.year}): ${item.note}"
+        } else {
+            "Zotero Research Note on \"${item.title}\" (${item.author}, ${item.year}): Key findings and methodology."
+        }
+        val currentBlocks = _document.value.blocks.toMutableList()
+        val activeIndex = currentBlocks.indexOfFirst { it.id == _activeBlockId.value }
+        val newBlock = DocBlock(
+            type = BlockType.CALLOUT,
+            calloutType = CalloutType.INFO,
+            text = noteText
+        )
+        val insertIdx = if (activeIndex >= 0) activeIndex + 1 else currentBlocks.size
+        currentBlocks.add(insertIdx, newBlock)
+        _document.value = _document.value.copy(blocks = currentBlocks, lastModified = System.currentTimeMillis())
+        _activeBlockId.value = newBlock.id
+        _zoteroStatusMessage.value = "Inserted Zotero Note block"
+        saveCurrentDocument()
+    }
+
+    fun movePastZoteroCitation() {
+        val active = getActiveBlock() ?: return
+        val text = active.text
+        val curEnd = _selectedTextRange.value?.second ?: text.length
+        val closeParen = text.indexOf(')', curEnd)
+        val closeBracket = text.indexOf(']', curEnd)
+        val targetPos = listOf(closeParen, closeBracket).filter { it >= 0 }.minOrNull()?.plus(1) ?: text.length
+        _selectedTextRange.value = targetPos to targetPos
+        _zoteroStatusMessage.value = "Caret moved past citation"
+    }
+
+    fun insertOrUpdateZoteroBibliography() {
+        if (_document.value.readOnlyLocked) return
+        pushUndo()
+        val style = _zoteroCslStyle.value
+        val entries = _zoteroItems.value.mapIndexed { idx, item ->
+            item.formatBibliographyEntry(style, idx + 1)
+        }.joinToString("\n\n")
+
+        val currentBlocks = _document.value.blocks.toMutableList()
+        val existingBibIdx = currentBlocks.indexOfFirst { it.type == BlockType.BIBLIOGRAPHY }
+        if (existingBibIdx >= 0) {
+            val updated = currentBlocks[existingBibIdx].copy(text = entries)
+            currentBlocks[existingBibIdx] = updated
+            _activeBlockId.value = updated.id
+        } else {
+            val newBlock = DocBlock(
+                type = BlockType.BIBLIOGRAPHY,
+                text = entries
+            )
+            currentBlocks.add(newBlock)
+            _activeBlockId.value = newBlock.id
+        }
+        _document.value = _document.value.copy(
+            blocks = currentBlocks,
+            citationStyle = style.displayName,
+            lastModified = System.currentTimeMillis()
+        )
+        _zoteroStatusMessage.value = "Updated Zotero Bibliography (${style.displayName})"
+        saveCurrentDocument()
+    }
+
+    fun refreshZoteroCitations() {
+        if (_document.value.readOnlyLocked) return
+        val style = _zoteroCslStyle.value
+        val items = _zoteroItems.value
+        val updatedBlocks = _document.value.blocks.map { block ->
+            if (block.type == BlockType.BIBLIOGRAPHY) {
+                val entries = items.mapIndexed { idx, item ->
+                    item.formatBibliographyEntry(style, idx + 1)
+                }.joinToString("\n\n")
+                block.copy(text = entries)
+            } else {
+                var newText = block.text
+                items.forEachIndexed { idx, item ->
+                    val lastName = item.author.substringBefore(",").trim()
+                    val targetCite = item.formatInTextCitation(style, idx + 1)
+                    // Replace older APA/MLA/Chicago/IEEE variants for this author+year
+                    val patterns = listOf(
+                        "($lastName, ${item.year})",
+                        "($lastName ${item.year})",
+                        "($lastName)"
+                    )
+                    for (pat in patterns) {
+                        if (newText.contains(pat) && pat != targetCite) {
+                            newText = newText.replace(pat, targetCite)
+                        }
+                    }
+                }
+                if (newText != block.text) block.copy(text = newText) else block
+            }
+        }
+        _document.value = _document.value.copy(
+            blocks = updatedBlocks,
+            citationStyle = style.displayName,
+            lastModified = System.currentTimeMillis()
+        )
+        _zoteroStatusMessage.value = "Refreshed all Zotero citations & bibliography (${style.displayName})"
+        saveCurrentDocument()
+    }
+
+    fun unlinkZoteroCitations() {
+        if (_document.value.readOnlyLocked) return
+        pushUndo()
+        val updatedBlocks = _document.value.blocks.map { block ->
+            if (block.type == BlockType.BIBLIOGRAPHY) {
+                block.copy(type = BlockType.PARAGRAPH)
+            } else {
+                block.copy(text = block.text.replace("ADDIN ZOTERO_ITEM ", ""))
+            }
+        }
+        _document.value = _document.value.copy(blocks = updatedBlocks, lastModified = System.currentTimeMillis())
+        _zoteroStatusMessage.value = "Unlinked Zotero field codes; citations converted to plain text"
+        saveCurrentDocument()
+    }
+
+    // =========================================================================
+    // Text Selection & Word Hover Mini-Toolbar Operations
+    // =========================================================================
+
+    fun setHoverToolbarExpandedTab(tab: String?) {
+        _hoverToolbarExpandedTab.value = if (_hoverToolbarExpandedTab.value == tab) null else tab
+        if (_hoverToolbarExpandedTab.value == "DEFINE") {
+            lookupActiveSelectionDefinition()
+        } else if (_hoverToolbarExpandedTab.value == "TRANSLATE") {
+            translateActiveSelection(_inlineTargetLang.value)
+        }
+    }
+
+    fun setInlineTargetLang(langCode: String) {
+        _inlineTargetLang.value = langCode
+        translateActiveSelection(langCode)
+    }
+
+    fun clearSelectionOrHover() {
+        _selectedTextRange.value = null
+        _selectedOrHoveredWord.value = ""
+        _hoverToolbarExpandedTab.value = null
+    }
+
+    /**
+     * Called whenever the user moves the cursor, taps a word, or selects a text range in a block.
+     * Automatically resolves either the selected range [selStart, selEnd) or the hovered word under the cursor.
+     */
+    fun updateSelectionOrHover(blockId: String, fullText: String, rawStart: Int, rawEnd: Int) {
+        if (_activeBlockId.value != blockId) {
+            _activeBlockId.value = blockId
+        }
+        if (fullText.isBlank()) {
+            _selectedTextRange.value = null
+            _selectedOrHoveredWord.value = ""
+            return
+        }
+        val start = rawStart.coerceIn(0, fullText.length)
+        val end = rawEnd.coerceIn(0, fullText.length)
+        val minPos = minOf(start, end)
+        val maxPos = maxOf(start, end)
+
+        if (minPos != maxPos) {
+            val sub = fullText.substring(minPos, maxPos).trim()
+            _selectedTextRange.value = minPos to maxPos
+            if (sub.isNotBlank() && sub != _selectedOrHoveredWord.value) {
+                _selectedOrHoveredWord.value = sub
+                _wordDefinition.value = null
+                _inlineTranslationResult.value = null
+                if (_hoverToolbarExpandedTab.value == "DEFINE") lookupActiveSelectionDefinition()
+                if (_hoverToolbarExpandedTab.value == "TRANSLATE") translateActiveSelection(_inlineTargetLang.value)
+            }
+        } else {
+            // Cursor / hover over a single point: find the word boundaries around `minPos`
+            val wordBounds = findWordBoundsAt(fullText, minPos)
+            if (wordBounds != null) {
+                val hoveredWord = fullText.substring(wordBounds.first, wordBounds.second)
+                _selectedTextRange.value = wordBounds
+                if (hoveredWord.isNotBlank() && hoveredWord != _selectedOrHoveredWord.value) {
+                    _selectedOrHoveredWord.value = hoveredWord
+                    _wordDefinition.value = null
+                    _inlineTranslationResult.value = null
+                    if (_hoverToolbarExpandedTab.value == "DEFINE") lookupActiveSelectionDefinition()
+                    if (_hoverToolbarExpandedTab.value == "TRANSLATE") translateActiveSelection(_inlineTargetLang.value)
+                }
+            }
+        }
+    }
+
+    private fun findWordBoundsAt(text: String, offset: Int): Pair<Int, Int>? {
+        if (text.isEmpty()) return null
+        val safeIdx = offset.coerceIn(0, (text.length - 1).coerceAtLeast(0))
+        var s = safeIdx
+        var e = safeIdx
+        if (!text[s].isLetterOrDigit() && s > 0 && text[s - 1].isLetterOrDigit()) {
+            s -= 1
+            e = s
+        }
+        if (!text[s].isLetterOrDigit()) return null
+        while (s > 0 && (text[s - 1].isLetterOrDigit() || text[s - 1] == '\'' || text[s - 1] == '-')) {
+            s--
+        }
+        while (e < text.length && (text[e].isLetterOrDigit() || text[e] == '\'' || text[e] == '-')) {
+            e++
+        }
+        return if (e > s) s to e else null
+    }
+
+    private fun updateActiveBlockSpan(transform: (TextSpan) -> TextSpan) {
+        val active = getActiveBlock() ?: return
+        val range = _selectedTextRange.value ?: findWordBoundsAt(active.text, active.text.length / 2) ?: (0 to active.text.length)
+        val s = range.first.coerceIn(0, active.text.length)
+        val e = range.second.coerceIn(0, active.text.length)
+        if (e <= s) return
+
+        pushUndo()
+        val existingIdx = active.spans.indexOfFirst { it.start == s && it.end == e }
+        val newSpans = active.spans.toMutableList()
+        if (existingIdx >= 0) {
+            newSpans[existingIdx] = transform(newSpans[existingIdx])
+        } else {
+            newSpans.add(transform(TextSpan(start = s, end = e)))
+        }
+        val updated = _document.value.blocks.map {
+            if (it.id == active.id) it.copy(spans = newSpans) else it
+        }
+        _document.value = _document.value.copy(blocks = updated, lastModified = System.currentTimeMillis())
+        saveCurrentDocument()
+    }
+
+    fun applySpanHighlight(highlightHex: String?) {
+        val active = getActiveBlock() ?: return
+        val range = _selectedTextRange.value
+        if (range != null && range.second > range.first) {
+            updateActiveBlockSpan { it.copy(highlightHex = highlightHex) }
+        } else {
+            updateBlockHighlightColor(highlightHex)
+        }
+    }
+
+    fun toggleSpanUnderline() {
+        val active = getActiveBlock() ?: return
+        val range = _selectedTextRange.value
+        if (range != null && range.second > range.first) {
+            updateActiveBlockSpan { it.copy(underline = !it.underline) }
+        } else {
+            toggleBlockUnderline()
+        }
+    }
+
+    fun toggleSpanBold() {
+        val active = getActiveBlock() ?: return
+        val range = _selectedTextRange.value
+        if (range != null && range.second > range.first) {
+            updateActiveBlockSpan { it.copy(bold = !it.bold) }
+        } else {
+            toggleBlockBold()
+        }
+    }
+
+    fun toggleSpanItalic() {
+        val active = getActiveBlock() ?: return
+        val range = _selectedTextRange.value
+        if (range != null && range.second > range.first) {
+            updateActiveBlockSpan { it.copy(italic = !it.italic) }
+        } else {
+            toggleBlockItalic()
+        }
+    }
+
+    fun toggleSpanStrikethrough() {
+        val active = getActiveBlock() ?: return
+        val range = _selectedTextRange.value
+        if (range != null && range.second > range.first) {
+            updateActiveBlockSpan { it.copy(strikethrough = !it.strikethrough) }
+        } else {
+            toggleBlockStrikethrough()
+        }
+    }
+
+    fun applySpanTextColor(colorHex: String?) {
+        val active = getActiveBlock() ?: return
+        val range = _selectedTextRange.value
+        if (range != null && range.second > range.first) {
+            updateActiveBlockSpan { it.copy(colorHex = colorHex) }
+        } else {
+            updateBlockTextColor(colorHex)
+        }
+    }
+
+    fun lookupActiveSelectionDefinition() {
+        val word = _selectedOrHoveredWord.value.ifBlank {
+            getActiveBlock()?.text?.trim()?.split("\\s+".toRegex())?.firstOrNull().orEmpty()
+        }
+        if (word.isBlank()) return
+        viewModelScope.launch {
+            _isLoadingDefinition.value = true
+            val def = DictionaryAndZoteroService.lookupWordDefinition(word)
+            _wordDefinition.value = def
+            _isLoadingDefinition.value = false
+        }
+    }
+
+    fun translateActiveSelection(targetLangCode: String = _inlineTargetLang.value) {
+        val selection = _selectedOrHoveredWord.value.ifBlank {
+            getActiveBlock()?.text.orEmpty()
+        }
+        if (selection.isBlank()) return
+        viewModelScope.launch {
+            _isInlineTranslating.value = true
+            val res = TranslationService.translateText(
+                text = selection,
+                sourceLang = "auto",
+                targetLang = targetLangCode
+            )
+            _inlineTranslationResult.value = res.getOrElse { "Translation unavailable: ${it.message}" }
+            _isInlineTranslating.value = false
+        }
+    }
+
+    fun replaceSelectionWithText(replacement: String) {
+        if (_document.value.readOnlyLocked || replacement.isBlank()) return
+        val active = getActiveBlock() ?: return
+        val range = _selectedTextRange.value
+        pushUndo()
+        val newText = if (range != null && range.first >= 0 && range.second <= active.text.length && range.second > range.first) {
+            active.text.substring(0, range.first) + replacement + active.text.substring(range.second)
+        } else {
+            replacement
+        }
+        val updated = _document.value.blocks.map {
+            if (it.id == active.id) it.copy(text = newText) else it
+        }
+        _document.value = _document.value.copy(blocks = updated, lastModified = System.currentTimeMillis())
+        _selectedOrHoveredWord.value = replacement
+        saveCurrentDocument()
+    }
+
+    fun appendTranslationToSelection(translated: String) {
+        if (_document.value.readOnlyLocked || translated.isBlank()) return
+        val active = getActiveBlock() ?: return
+        val range = _selectedTextRange.value
+        pushUndo()
+        val newText = if (range != null && range.first >= 0 && range.second <= active.text.length && range.second > range.first) {
+            val original = active.text.substring(range.first, range.second)
+            active.text.substring(0, range.first) + "$original ($translated)" + active.text.substring(range.second)
+        } else {
+            "${active.text} ($translated)"
+        }
+        val updated = _document.value.blocks.map {
+            if (it.id == active.id) it.copy(text = newText) else it
+        }
+        _document.value = _document.value.copy(blocks = updated, lastModified = System.currentTimeMillis())
+        saveCurrentDocument()
+    }
+
+    fun transformSelectionCase(mode: String) {
+        val current = _selectedOrHoveredWord.value
+        if (current.isBlank()) return
+        val transformed = when (mode) {
+            "UPPER" -> current.uppercase()
+            "LOWER" -> current.lowercase()
+            "TITLE" -> current.split(" ").joinToString(" ") { w ->
+                w.lowercase().replaceFirstChar { it.titlecase() }
+            }
+            else -> current
+        }
+        replaceSelectionWithText(transformed)
+    }
+
+    fun speakSelection() {
+        val textToRead = _selectedOrHoveredWord.value.ifBlank {
+            getActiveBlock()?.text.orEmpty()
+        }
+        if (textToRead.isNotBlank() && ttsReady) {
+            tts?.speak(textToRead, TextToSpeech.QUEUE_FLUSH, null, "selection_tts")
+        }
+    }
+
+    fun copySelectedText(context: Context) {
+        val text = _selectedOrHoveredWord.value.ifBlank { getActiveBlock()?.text.orEmpty() }
+        if (text.isNotBlank()) {
+            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+            val clip = android.content.ClipData.newPlainText("WordCraft Selection", text)
+            clipboard.setPrimaryClip(clip)
+            android.widget.Toast.makeText(context, "Copied \"${text.take(20)}\"", android.widget.Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    fun cutSelectedText(context: Context) {
+        copySelectedText(context)
+        replaceSelectionWithText("")
+    }
+
+    fun pasteFromClipboard(context: Context, mode: String = "MERGE") {
+        try {
+            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+            val item = clipboard.primaryClip?.getItemAt(0)
+            val text = item?.text?.toString().orEmpty()
+            if (text.isNotBlank()) {
+                val toInsert = when (mode) {
+                    "TEXT_ONLY" -> text.replace("\\s+".toRegex(), " ")
+                    "UPPER" -> text.uppercase()
+                    "LOWER" -> text.lowercase()
+                    else -> text
+                }
+                insertUnicodeSymbol(toInsert)
+                android.widget.Toast.makeText(context, "Pasted into document", android.widget.Toast.LENGTH_SHORT).show()
+            }
+        } catch (e: Exception) {
+            android.widget.Toast.makeText(context, "Clipboard empty or inaccessible", android.widget.Toast.LENGTH_SHORT).show()
+        }
+    }
+
     fun saveCurrentDocument() {
         viewModelScope.launch {
             try {
@@ -1248,6 +1816,25 @@ class WordCraftViewModel(application: Application) : AndroidViewModel(applicatio
                             put("calloutType", b.calloutType?.name ?: "")
                             put("shapeKind", b.shapeKind ?: "")
 
+                            if (b.spans.isNotEmpty()) {
+                                val spansArr = JSONArray()
+                                for (sp in b.spans) {
+                                    spansArr.put(
+                                        JSONObject().apply {
+                                            put("start", sp.start)
+                                            put("end", sp.end)
+                                            put("bold", sp.bold)
+                                            put("italic", sp.italic)
+                                            put("underline", sp.underline)
+                                            put("strikethrough", sp.strikethrough)
+                                            put("colorHex", sp.colorHex ?: "")
+                                            put("highlightHex", sp.highlightHex ?: "")
+                                        }
+                                    )
+                                }
+                                put("spans", spansArr)
+                            }
+
                             b.tableData?.let { t ->
                                 val tObj = JSONObject().apply {
                                     put("headers", JSONArray(t.headers))
@@ -1285,6 +1872,25 @@ class WordCraftViewModel(application: Application) : AndroidViewModel(applicatio
                 val callout = runCatching { CalloutType.valueOf(bObj.getString("calloutType")) }.getOrNull()
                 val fontSize = if (bObj.has("fontSizeSp")) bObj.optInt("fontSizeSp", type.defaultFontSizeSp()) else null
 
+                val spans = mutableListOf<TextSpan>()
+                bObj.optJSONArray("spans")?.let { sArr ->
+                    for (sIdx in 0 until sArr.length()) {
+                        val sObj = sArr.getJSONObject(sIdx)
+                        spans.add(
+                            TextSpan(
+                                start = sObj.optInt("start", 0),
+                                end = sObj.optInt("end", 0),
+                                bold = sObj.optBoolean("bold", false),
+                                italic = sObj.optBoolean("italic", false),
+                                underline = sObj.optBoolean("underline", false),
+                                strikethrough = sObj.optBoolean("strikethrough", false),
+                                colorHex = sObj.optString("colorHex").takeIf { it.isNotBlank() },
+                                highlightHex = sObj.optString("highlightHex").takeIf { it.isNotBlank() }
+                            )
+                        )
+                    }
+                }
+
                 var tableData: TableData? = null
                 if (bObj.has("tableData")) {
                     val tObj = bObj.getJSONObject("tableData")
@@ -1304,6 +1910,7 @@ class WordCraftViewModel(application: Application) : AndroidViewModel(applicatio
                         id = bObj.getString("id"),
                         type = type,
                         text = bObj.getString("text"),
+                        spans = spans,
                         alignment = align,
                         fontFamily = bObj.optString("fontFamily", "Inter").ifBlank { "Inter" },
                         fontSizeSp = fontSize,

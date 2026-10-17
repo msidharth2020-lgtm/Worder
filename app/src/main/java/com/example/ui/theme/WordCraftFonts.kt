@@ -24,11 +24,67 @@ object WordCraftFonts {
 
     val availableFonts: List<FontOption> = listOf(
         FontOption(
+            id = "Aptos",
+            displayName = "Aptos",
+            category = "Default Font",
+            fontFamily = FontFamily.SansSerif,
+            docxFontName = "Aptos"
+        ),
+        FontOption(
+            id = "Aptos Display",
+            displayName = "Aptos Display",
+            category = "Default Font",
+            fontFamily = FontFamily.SansSerif,
+            docxFontName = "Aptos Display"
+        ),
+        FontOption(
             id = "Inter",
             displayName = "Inter",
             category = "Google Sans",
             fontFamily = InterFamily,
             docxFontName = "Inter"
+        ),
+        FontOption(
+            id = "Inter Medium",
+            displayName = "Inter Medium",
+            category = "Google Sans",
+            fontFamily = InterFamily,
+            docxFontName = "Inter"
+        ),
+        FontOption(
+            id = "Inter SemiBold",
+            displayName = "Inter SemiBold",
+            category = "Google Sans",
+            fontFamily = InterFamily,
+            docxFontName = "Inter"
+        ),
+        FontOption(
+            id = "JetBrains Mono",
+            displayName = "JetBrains Mono",
+            category = "Monospace",
+            fontFamily = FontFamily.Monospace,
+            docxFontName = "JetBrains Mono"
+        ),
+        FontOption(
+            id = "Source Serif 4",
+            displayName = "Source Serif 4",
+            category = "Modern Serif",
+            fontFamily = FontFamily.Serif,
+            docxFontName = "Source Serif 4"
+        ),
+        FontOption(
+            id = "Source Serif 4 Italic",
+            displayName = "Source Serif 4 Italic",
+            category = "Modern Serif",
+            fontFamily = FontFamily.Serif,
+            docxFontName = "Source Serif 4"
+        ),
+        FontOption(
+            id = "Source Serif 4 SemiBold",
+            displayName = "Source Serif 4 SemiBold",
+            category = "Modern Serif",
+            fontFamily = FontFamily.Serif,
+            docxFontName = "Source Serif 4"
         ),
         FontOption(
             id = "Merriweather",
@@ -67,31 +123,17 @@ object WordCraftFonts {
         ),
         FontOption(
             id = "Sans Serif",
-            displayName = "System Sans",
+            displayName = "Calibri (System)",
             category = "System",
             fontFamily = FontFamily.SansSerif,
             docxFontName = "Calibri"
         ),
         FontOption(
             id = "Serif",
-            displayName = "System Serif",
+            displayName = "Times New Roman (System)",
             category = "System",
             fontFamily = FontFamily.Serif,
             docxFontName = "Times New Roman"
-        ),
-        FontOption(
-            id = "Monospace",
-            displayName = "System Mono",
-            category = "System",
-            fontFamily = FontFamily.Monospace,
-            docxFontName = "Courier New"
-        ),
-        FontOption(
-            id = "Cursive",
-            displayName = "System Cursive",
-            category = "System",
-            fontFamily = FontFamily.Cursive,
-            docxFontName = "Comic Sans MS"
         )
     )
 

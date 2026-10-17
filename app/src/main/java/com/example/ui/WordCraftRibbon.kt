@@ -195,6 +195,7 @@ fun WordCraftRibbon(
                     RibbonTab.LAYOUT -> LayoutRibbonTools(viewModel)
                     RibbonTab.REFERENCES -> ReferencesRibbonTools(viewModel)
                     RibbonTab.MAILINGS -> MailingsRibbonTools(viewModel)
+                    RibbonTab.ZOTERO -> ZoteroRibbonTools(viewModel)
                     RibbonTab.REVIEW -> ReviewRibbonTools(viewModel)
                     RibbonTab.VIEW -> ViewRibbonTools(viewModel)
                     RibbonTab.DEVELOPER -> DeveloperRibbonTools(viewModel)
@@ -1096,6 +1097,105 @@ private fun MailingsRibbonTools(viewModel: WordCraftViewModel) {
         label = "«Company»",
         onClick = { viewModel.insertMergeField("Company") },
         testTag = "mailings_company_button"
+    )
+}
+
+@Composable
+private fun ZoteroRibbonTools(viewModel: WordCraftViewModel) {
+    val items by viewModel.zoteroItems.collectAsState()
+    val cslStyle by viewModel.zoteroCslStyle.collectAsState()
+    var showStyleMenu by remember { mutableStateOf(false) }
+
+    // 1. Add/Edit Citation (ui.zotero.addEditCitation)
+    RibbonActionButton(
+        icon = Icons.Default.Bookmark,
+        label = "Add/Edit Citation",
+        onClick = { viewModel.setShowZoteroDialog(true) },
+        testTag = "zotero_add_edit_citation"
+    )
+
+    // 2. Add Note (ui.zotero.addNote)
+    RibbonActionButton(
+        icon = Icons.Default.Comment,
+        label = "Add Note",
+        onClick = {
+            items.firstOrNull()?.let { viewModel.insertZoteroNote(it) }
+                ?: viewModel.setShowZoteroDialog(true)
+        },
+        testTag = "zotero_add_note"
+    )
+
+    // 3. Move Past Citation (caret.pastCitation)
+    RibbonActionButton(
+        icon = Icons.Default.FormatIndentIncrease,
+        label = "Move Past Citation",
+        onClick = { viewModel.movePastZoteroCitation() },
+        testTag = "zotero_move_past_citation"
+    )
+
+    RibbonDivider()
+
+    // 4. Add/Edit Bibliography (ui.zotero.addEditBibliography)
+    RibbonActionButton(
+        icon = Icons.Default.MenuBook,
+        label = "Add/Edit Bibliography",
+        onClick = { viewModel.insertOrUpdateZoteroBibliography() },
+        testTag = "zotero_add_edit_bibliography"
+    )
+
+    RibbonDivider()
+
+    // 5. Refresh (ui.zotero.refresh)
+    RibbonActionButton(
+        icon = Icons.Default.TrackChanges,
+        label = "Refresh",
+        onClick = { viewModel.refreshZoteroCitations() },
+        testTag = "zotero_refresh"
+    )
+
+    // 6. Document Preferences (ui.zotero.setDocPrefs)
+    Box {
+        RibbonActionButton(
+            icon = Icons.Default.Menu,
+            label = "Doc Prefs (${cslStyle.id.uppercase()})",
+            onClick = { showStyleMenu = true },
+            testTag = "zotero_doc_prefs"
+        )
+        DropdownMenu(
+            expanded = showStyleMenu,
+            onDismissRequest = { showStyleMenu = false }
+        ) {
+            com.example.export.CslStyle.entries.forEach { style ->
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            text = style.displayName,
+                            fontWeight = if (cslStyle == style) FontWeight.Bold else FontWeight.Normal
+                        )
+                    },
+                    onClick = {
+                        viewModel.setZoteroCslStyle(style)
+                        showStyleMenu = false
+                    }
+                )
+            }
+            Divider()
+            DropdownMenuItem(
+                text = { Text("Open Zotero Studio & DOI Search...", color = WordCraftPrimary, fontWeight = FontWeight.Bold) },
+                onClick = {
+                    showStyleMenu = false
+                    viewModel.setShowZoteroDialog(true)
+                }
+            )
+        }
+    }
+
+    // 7. Unlink Citations (ui.zotero.removeCodes)
+    RibbonActionButton(
+        icon = Icons.Default.FormatClear,
+        label = "Unlink Citations",
+        onClick = { viewModel.unlinkZoteroCitations() },
+        testTag = "zotero_unlink_citations"
     )
 }
 

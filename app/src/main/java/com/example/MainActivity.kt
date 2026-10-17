@@ -38,9 +38,11 @@ import com.example.ui.WordCraftNavigationPane
 import com.example.ui.WordCraftReferencesDialog
 import com.example.ui.WordCraftRibbon
 import com.example.ui.WordCraftStatsModal
+import com.example.ui.WordCraftStatusBar
 import com.example.ui.WordCraftTopBar
 import com.example.ui.WordCraftTranslateDialog
 import com.example.ui.WordCraftUnicodeDialog
+import com.example.ui.WordCraftZoteroDialog
 import com.example.ui.theme.WordCraftTheme
 import com.example.viewmodel.WordCraftViewModel
 import java.io.File
@@ -69,6 +71,7 @@ class MainActivity : ComponentActivity() {
                 val showReferences by viewModel.showReferencesDialog.collectAsState()
                 val showMailings by viewModel.showMailingsDialog.collectAsState()
                 val showAccessibility by viewModel.showAccessibilityDialog.collectAsState()
+                val showZotero by viewModel.showZoteroDialog.collectAsState()
                 val showFindReplace by viewModel.showFindReplace.collectAsState()
                 val doc by viewModel.document.collectAsState()
 
@@ -127,6 +130,9 @@ class MainActivity : ComponentActivity() {
                                 viewModel = viewModel,
                                 modifier = Modifier.weight(1f)
                             )
+
+                            // Microsoft Word Bottom Status Bar (Page, Word count, Proofing, View Modes, Zoom)
+                            WordCraftStatusBar(viewModel = viewModel)
                         }
 
                         // Floating side panes (Navigation Outline & Comments)
@@ -225,6 +231,14 @@ class MainActivity : ComponentActivity() {
                             WordCraftAccessibilityDialog(
                                 viewModel = viewModel,
                                 onDismiss = { viewModel.setShowAccessibilityDialog(false) }
+                            )
+                        }
+
+                        // Zotero Citations, Bibliography & CSL Preferences Studio Dialog (WordCraft Web v0.7.0)
+                        if (showZotero) {
+                            WordCraftZoteroDialog(
+                                viewModel = viewModel,
+                                onDismiss = { viewModel.setShowZoteroDialog(false) }
                             )
                         }
 
